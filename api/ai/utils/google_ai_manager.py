@@ -1,6 +1,8 @@
 from google.cloud import speech, texttospeech, vision
 from google.generativeai import GenerativeModel, configure
 import tiktoken
+from mutagen.mp3 import MP3
+from mutagen.flac import FLAC
 
 from ai.utils.ai_manager import BaseAIManager
 from ai.utils.audio_manager import AudioManager
@@ -23,7 +25,7 @@ class GoogleAIManager(BaseAIManager):
         self.speech_client = speech.SpeechClient()
         self.tts_client = texttospeech.TextToSpeechClient()
         self.vision_client = vision.ImageAnnotatorClient()
-        self.model = GenerativeModel("gemini-pro") if api_key else None
+        self.model = GenerativeModel("models/gemini-1.5-pro-latest") if api_key else None
         self.GOOGLE_AI_PRICING = {
             "gemini-pro": {
                 "input_per_1k_token": 0.0005,
@@ -124,13 +126,13 @@ class GoogleAIManager(BaseAIManager):
             raise ValueError("Prompt is empty. Add messages before generating a response.")
         response = self.model.generate_content(use_prompt, generation_config={"max_output_tokens": max_token})
         enc = tiktoken.get_encoding("cl100k_base") 
-        input_token_count = len(enc.encode(prompt))
+        input_token_count = len(enc.encode(use_prompt))
         output_token_count = len(enc.encode(response.text))
         self.cost += (input_token_count / 1000) * self.GOOGLE_AI_PRICING["gemini-pro"]["input_per_1k_token"]
         self.cost += (output_token_count / 1000) * self.GOOGLE_AI_PRICING["gemini-pro"]["output_per_1k_token"]
         return response.text
     
-    def stt(self, audio_bytes, language_code='en-US', sample_rate_hertz=16000):
+    def stt(self, audio_bytes, language_code='en-US', sample_rate_hertz=16000, encoding=None, file_path=None):
         """
         Perform speech-to-text using Google Cloud Speech-to-Text API.
 
@@ -138,27 +140,54 @@ class GoogleAIManager(BaseAIManager):
             audio_bytes (bytes): The input audio data.
             language_code (str): Language code of the audio. Default is 'en-US'.
             sample_rate_hertz (int): Sample rate in Hz. Default is 16000.
+            encoding: The audio encoding format (e.g., LINEAR16, MP3, FLAC).
+            file_path (str): Optional path to the audio file (for duration calculation).
 
         Returns:
             dict: The transcription result.
         """
+        if encoding is None:
+            encoding = speech.RecognitionConfig.AudioEncoding.LINEAR16
+
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=audio_bytes)
         config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            encoding=encoding,
             sample_rate_hertz=sample_rate_hertz,
             language_code=language_code,
+            enable_automatic_punctuation=True
         )
         response = client.recognize(config=config, audio=audio)
 
-        audio_manager = AudioManager()
-        duration_seconds = audio_manager.get_wav_duration(audio_bytes)
-        duration_minutes = duration_seconds / 60
+        duration_seconds = None
+        if hasattr(response, "total_billed_time") and response.total_billed_time:
+            duration_seconds = response.total_billed_time.total_seconds()
+        else:
+            if encoding == speech.RecognitionConfig.AudioEncoding.LINEAR16:
+                audio_manager = AudioManager()
+                duration_seconds = audio_manager.get_wav_duration(audio_bytes)
+            elif encoding == speech.RecognitionConfig.AudioEncoding.MP3 and file_path:
+                try:
+                    duration_seconds = MP3(file_path).info.length
+                except Exception as e:
+                    print(f"Error reading MP3 duration: {e}")
+                    duration_seconds = 0
+            elif encoding == speech.RecognitionConfig.AudioEncoding.FLAC and file_path:
+                try:
+                    duration_seconds = FLAC(file_path).info.length
+                except Exception as e:
+                    print(f"Error reading FLAC duration: {e}")
+                    duration_seconds = 0
+
+        duration_minutes = (duration_seconds / 60) if duration_seconds else 0
         price_per_minute = self.GOOGLE_AI_PRICING["speech-to-text"]["audio_stt_per_1_minute"]
         cost = duration_minutes * price_per_minute
         self.cost += cost
-        return response
-    
+        texts = []
+        for result in response.results:
+            texts.append(result.alternatives[0].transcript)
+        return " ".join(texts)
+
     def tts(self, text, voice_name="en-US-Wavenet-D", audio_encoding=texttospeech.AudioEncoding.MP3):
         """
         Perform text-to-speech using Google Cloud Text-to-Speech API.
@@ -172,7 +201,10 @@ class GoogleAIManager(BaseAIManager):
             bytes: The audio content in the specified format.
         """
         client = texttospeech.TextToSpeechClient()
-        input_text = texttospeech.SynthesisInput(text=text)
+        if isinstance(text, str) and text.strip().startswith("<speak>"):
+            input_text = texttospeech.SynthesisInput(ssml=text)
+        else:
+            input_text = texttospeech.SynthesisInput(text=text)
         voice = texttospeech.VoiceSelectionParams(
             name=voice_name,
             language_code="en-US",

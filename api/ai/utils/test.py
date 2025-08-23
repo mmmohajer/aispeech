@@ -2,8 +2,10 @@ from pydoc import text
 from django.conf import settings
 import json
 import os
+from google.cloud import texttospeech, speech
 
 from ai.utils.open_ai_manager import OpenAIManager
+from ai.utils.google_ai_manager import GoogleAIManager
 
 def test_get_response():
     manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
@@ -68,5 +70,57 @@ def test_ai_stt():
     text = manager.stt(audio_input=audio_bytes, input_type="bytes")
     print(f"Transcribed Text: {text}")
 
-def test_openai_manager():
-    test_ai_stt()
+def test_google_add_message():
+    manager = GoogleAIManager(api_key=settings.GOOGLE_API_KEY)
+    manager.add_message("user", text="Hello, Google!")
+    manager.add_message("assistant", text="Hello, How are you?")
+    manager.add_message("system", text="You are a helpful assistant.")
+    manager.add_message("user", text="Can you tell me a joke?")
+    manager.add_message("user", text="This is a joke for you.")
+    manager.add_message("system", text="You have to build a joke.")
+    print(manager.prompt)
+
+def test_google_generate_response():
+    manager = GoogleAIManager(api_key=settings.GOOGLE_API_KEY)
+    manager.add_message("user", text="Tell me a joke.")
+    response = manager.generate_response()
+    print(f"Response: {response}")
+
+def test_google_tts():
+    manager = GoogleAIManager(api_key=settings.GOOGLE_API_KEY)
+    text = (
+        """<speak>\n"
+        "Hello, Google!\n"
+        "<break time=\"500ms\"/>\n"
+        "<emphasis level=\"strong\">This is a demonstration of speech synthesis.</emphasis>\n"
+        "<break time=\"300ms\"/>\n"
+        "<prosody pitch=\"+2st\" rate=\"slow\">You can control pitch and speaking rate with SSML prosody tags.</prosody>\n"
+        "<break time=\"400ms\"/>\n"
+        "<prosody pitch=\"-2st\" rate=\"fast\">Now, let's try a lower pitch and faster rate.</prosody>\n"
+        "<break time=\"300ms\"/>\n"
+        "<emphasis level=\"moderate\">SSML makes your TTS output more expressive!</emphasis>\n"
+        "<break time=\"500ms\"/>\n"
+        "Thank you for listening.\n"
+        "</speak>"""
+    )
+    audio_bytes = manager.tts(text=text, voice_name="en-US-Wavenet-D", audio_encoding=texttospeech.AudioEncoding.MP3)
+    audio_file_path = os.path.join("/websocket_tmp/google_tts", 'tts_audio.mp3')
+    with open(audio_file_path, 'wb') as file:
+        file.write(audio_bytes)
+    print(f"Successfully Done")
+
+def test_google_stt():
+    manager = GoogleAIManager(api_key=settings.GOOGLE_API_KEY)
+    audio_file_path = os.path.join("/websocket_tmp/google_tts", 'tts_audio.mp3')
+    with open(audio_file_path, 'rb') as file:
+        audio_bytes = file.read()
+        text = manager.stt(
+            audio_bytes=audio_bytes,
+            encoding=speech.RecognitionConfig.AudioEncoding.MP3,
+            file_path=audio_file_path
+        )
+    print(manager.get_cost())
+    print(f"Transcribed Text: {text}")
+
+def test_ai_manager():
+    test_google_stt()

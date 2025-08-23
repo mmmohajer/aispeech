@@ -1,0 +1,208 @@
+import base64
+from io import BytesIO
+from PIL import Image, ImageEnhance, ImageFilter
+from google.cloud import vision, documentai
+from google.api_core.client_options import ClientOptions
+
+from ai.utils.doc_ai_managr import DocAIManager
+
+class OCRManager:
+    def __init__(self, google_cloud_project_id, google_cloud_location, google_cloud_processor_id):
+        """
+        Initializes the OCRManager instance with Google Cloud configuration.
+
+        Args:
+            google_cloud_project_id (str): Google Cloud project ID.
+            google_cloud_location (str): Google Cloud location (e.g., 'us', 'eu').
+            google_cloud_processor_id (str): Document AI processor ID.
+
+        Sets:
+            self.cost (float): Stores the cost of the last OCR operation.
+        """
+        self.GOOGLE_CLOUD_PROJECT_ID = google_cloud_project_id
+        self.GOOGLE_CLOUD_LOCATION = google_cloud_location
+        self.GOOGLE_CLOUD_PROCESSOR_ID = google_cloud_processor_id
+        self.cost = 0
+
+    def _png_bytes_to_pdf_bytes(self, png_bytes):
+        """
+        Converts PNG image bytes to PDF bytes.
+
+        Args:
+            png_bytes (bytes): PNG image data.
+
+        Returns:
+            bytes: PDF file data.
+        """
+        im = Image.open(BytesIO(png_bytes)).convert("RGB")
+        out = BytesIO()
+        im.save(out, format="PDF", resolution=300.0)
+        return out.getvalue()
+    
+    def _docai_blocks_to_html(self, document):
+        """
+        Converts Document AI blocks to HTML using DocAIManager.
+
+        Args:
+            document: Document AI document object.
+
+        Returns:
+            str: HTML representation of the document blocks.
+        """
+        layout = getattr(document, "document_layout", None)
+        if not layout:
+            return ""
+        blocks = getattr(layout, "blocks", [])
+        doc_ai_manager = DocAIManager()
+        return doc_ai_manager.render_html_blocks(blocks)
+
+    def get_cost(self):
+        """
+        Returns the current cost of OCR processing.
+
+        Returns:
+            float: The cost of the last OCR operation.
+        """
+        return self.cost
+
+    def clear_cost(self):
+        """
+        Clears the current cost of OCR processing.
+
+        Returns:
+            None
+        """
+        self.cost = 0
+    
+    def convert_pdf_page_to_png_bytes(self, pdf_bytes):
+        """
+        Converts a single PDF page (as bytes) to PNG image bytes.
+
+        Args:
+            pdf_bytes (bytes): PDF page data.
+
+        Returns:
+            bytes: PNG image data.
+        """
+        pdf = Image.open(BytesIO(pdf_bytes))
+        png_bytes = BytesIO()
+        pdf.save(png_bytes, format="PNG")
+        return png_bytes.getvalue()
+
+    def get_pdf_page_count(self, pdf_bytes):
+        """
+        Returns the number of pages in a PDF file.
+
+        Args:
+            pdf_bytes (bytes): PDF file data.
+
+        Returns:
+            int: Number of pages in the PDF.
+        """
+        pdf = Image.open(BytesIO(pdf_bytes))
+        return pdf.n_frames
+
+    def make_img_more_readable(self, img_bytes):
+        """
+        Enhances the readability of an image by applying sharpening and contrast enhancement.
+
+        Args:
+            img_bytes (bytes): Image data (PNG, JPEG, etc.).
+
+        Returns:
+            bytes: Enhanced PNG image data.
+        """
+        im = Image.open(BytesIO(img_bytes))
+        im = im.filter(ImageFilter.SHARPEN)
+        enhancer = ImageEnhance.Contrast(im)
+        im = enhancer.enhance(1.5)
+        out = BytesIO()
+        im.save(out, format="PNG")
+        return out.getvalue()
+    
+    def ocr_using_document_ai(self, base64_encoded_file, cost_per_page=0.03):
+        """
+        Processes an image or PDF file using Google Document AI OCR, applying image enhancement for better readability.
+        Supports multi-page PDFs by processing each page individually and concatenating the HTML output.
+
+        Args:
+            base64_encoded_file (str): Base64-encoded image or PDF file.
+            cost_per_page (float, optional): Cost per page for Document AI OCR (default $0.03).
+
+        Returns:
+            str or None: HTML output from Document AI OCR, or None on error.
+        Sets:
+            self.cost (float): Total cost for the operation.
+        """
+        try:
+            client = documentai.DocumentProcessorServiceClient(
+                client_options=ClientOptions(api_endpoint=f"{self.GOOGLE_CLOUD_LOCATION}-documentai.googleapis.com")
+            )
+            name = client.processor_path(self.GOOGLE_CLOUD_PROJECT_ID, self.GOOGLE_CLOUD_LOCATION, self.GOOGLE_CLOUD_PROCESSOR_ID)
+            img_bytes = base64.b64decode(base64_encoded_file)
+            mime_type = None
+            html_outputs = []
+            num_pages = 1
+            try:
+                im = Image.open(BytesIO(img_bytes))
+                fmt = im.format.lower()
+                if fmt == "png":
+                    mime_type = "image/png"
+                elif fmt == "jpeg":
+                    mime_type = "image/jpeg"
+                elif fmt == "tiff":
+                    mime_type = "image/tiff"
+                else:
+                    mime_type = "application/octet-stream"
+                enhanced_bytes = self.make_img_more_readable(img_bytes)
+                req = documentai.ProcessRequest(
+                    name=name,
+                    raw_document=documentai.RawDocument(content=enhanced_bytes, mime_type=mime_type),
+                )
+                res = client.process_document(request=req)
+                html_output = self._docai_blocks_to_html(res.document)
+                html_outputs.append(html_output)
+                num_pages = 1
+            except Exception:
+                mime_type = "application/pdf"
+                try:
+                    from pdf2image import convert_from_bytes
+                    pages = convert_from_bytes(img_bytes, fmt="png")
+                    if pages:
+                        num_pages = len(pages)
+                        for page in pages:
+                            png_bytes_io = BytesIO()
+                            page.save(png_bytes_io, format="PNG")
+                            png_bytes = png_bytes_io.getvalue()
+                            enhanced_bytes = self.make_img_more_readable(png_bytes)
+                            req = documentai.ProcessRequest(
+                                name=name,
+                                raw_document=documentai.RawDocument(content=enhanced_bytes, mime_type="image/png"),
+                            )
+                            res = client.process_document(request=req)
+                            html_output = self._docai_blocks_to_html(res.document)
+                            html_outputs.append(html_output)
+                    else:
+                        num_pages = 1
+                        req = documentai.ProcessRequest(
+                            name=name,
+                            raw_document=documentai.RawDocument(content=img_bytes, mime_type=mime_type),
+                        )
+                        res = client.process_document(request=req)
+                        html_output = self._docai_blocks_to_html(res.document)
+                        html_outputs.append(html_output)
+                except Exception:
+                    num_pages = 1
+                    req = documentai.ProcessRequest(
+                        name=name,
+                        raw_document=documentai.RawDocument(content=img_bytes, mime_type=mime_type),
+                    )
+                    res = client.process_document(request=req)
+                    html_output = self._docai_blocks_to_html(res.document)
+                    html_outputs.append(html_output)
+            self.cost = num_pages * cost_per_page
+            return "\n".join(html_outputs)
+        except Exception as e:
+            print(f"Error in Document AI OCR: {e}")
+            self.cost = 0
+            return None
