@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group
 
-LIST_OF_GROUPS = ["ADMIN"]
+LIST_OF_GROUPS = ["ADMIN", "CLIENT"]
 
 def build_group_list():
     for group in LIST_OF_GROUPS:
@@ -15,6 +15,13 @@ def build_group_list():
 def isAdmin(user):
     user_groups_queryset = user.groups.all()
     cur_user_groups = [group.name for group in list(user_groups_queryset)]
-    if "Admin" in cur_user_groups:
+    if "ADMIN" in cur_user_groups:
+        return True
+    return False
+
+def isClient(user):
+    user_groups_queryset = user.groups.all()
+    cur_user_groups = [group.name for group in list(user_groups_queryset)]
+    if "CLIENT" in cur_user_groups:
         return True
     return False

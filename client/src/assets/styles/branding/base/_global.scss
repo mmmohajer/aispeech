@@ -41,7 +41,7 @@ body {
 
   background-color: white;
   overflow-x: hidden;
-  color: map.get($brandingColors, "theme-two");
+  color: black;
 }
 
 img {
@@ -81,5 +81,9 @@ p {
 
   &min-full-vh {
     min-height: 100vh;
+  }
+
+  &transition-one {
+    transition: all 0.3s ease-in-out;
   }
 }

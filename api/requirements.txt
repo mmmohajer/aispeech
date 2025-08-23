@@ -40,4 +40,8 @@ pypandoc==1.15
 weasyprint==66.0
 google-cloud-vision==3.10.2
 google-cloud-documentai==3.5.0
+google-cloud-texttospeech==2.27.0
+google-cloud-speech==2.33.0
+google-generativeai==0.8.5
 beautifulsoup4==4.13.4
+tiktoken==0.11.0

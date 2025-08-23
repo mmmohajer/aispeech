@@ -15,7 +15,11 @@ const Index = () => {
       url="https://tipsbymoh.tech/app/"
       imgAlt="Tech Tips by Moh | Full-Stack Developer, System Design Expert, and Tech Mentor"
     >
-      <AppContainer pageIdentifier="dashboard">
+      <AppContainer
+        pageIdentifier="dashboard"
+        hasSideBarDashboard={false}
+        hasHeader={false}
+      >
         <RoleBasedRoute authorizedRoles={["CLIENT"]}>
           <Dashboard />
         </RoleBasedRoute>

@@ -1,23 +1,16 @@
-import { useSelector } from "react-redux";
+import { useState, useEffect, useRef } from "react";
 
 import Div from "@/baseComponents/reusableComponents/Div";
-import LogOut from "@/components/appPages/shared/LogOut";
 
+import ConnectionToSocket from "./subs/ConnectionToSocket";
+import ChatBox from "./subs/ChatBox";
 const Dashboard = () => {
-  const profile = useSelector((state) => state.profile);
+  const socketRefManager = useRef();
   return (
     <>
-      <Div className="bg-yellow flex--gr--1">
-        <Div className="height-vh-full">Dashboard {profile?.user?.email}</Div>
-        <LogOut
-          type="flex"
-          hAlign="center"
-          vAlign="center"
-          className="mouse-hand bg-red width-px-200 m-y-16 p-y-8 text-white"
-        >
-          Logout
-        </LogOut>
-      </Div>
+      <ConnectionToSocket socketRefManager={socketRefManager}>
+        <ChatBox socketRefManager={socketRefManager} />
+      </ConnectionToSocket>
     </>
   );
 };

@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 
-import Loading from "@/baseComponents/pageParts/Loading";
-
 import {
   setLocalStorage,
   getLocalStorage,
@@ -17,7 +15,7 @@ import {
 import { PAGE_ROUTES } from "@/constants/pageRoutes";
 import { setProfile } from "@/reducer/subs/profile";
 
-const BaseAppWrapper = ({ isAuthPage, children }) => {
+const BaseAppWrapper = ({ isAuthPage = false, children }) => {
   const dispatch = useDispatch();
   const router = useRouter();
   const profile = useSelector((state) => state.profile);
@@ -38,7 +36,7 @@ const BaseAppWrapper = ({ isAuthPage, children }) => {
       } else {
         removeLocalStorage("access_token");
         removeLocalStorage("refresh_token");
-        if (isAuthPage) {
+        if (!isAuthPage) {
           router.push(PAGE_ROUTES.LOGIN);
         }
         setShowAuthPage(true);
