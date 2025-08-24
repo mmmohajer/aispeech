@@ -3,6 +3,8 @@ from io import BytesIO
 from PIL import Image, ImageEnhance, ImageFilter
 from google.cloud import vision, documentai
 from google.api_core.client_options import ClientOptions
+from pdf2image import convert_from_bytes
+import requests
 
 from ai.utils.doc_ai_managr import DocAIManager
 
@@ -73,21 +75,49 @@ class OCRManager:
             None
         """
         self.cost = 0
-    
-    def convert_pdf_page_to_png_bytes(self, pdf_bytes):
+
+    def convert_pdf_page_to_png_bytes(self, source, page_number):
         """
-        Converts a single PDF page (as bytes) to PNG image bytes.
+        Converts a single PDF page to PNG image bytes. Accepts a file path, URL, or bytes.
 
         Args:
-            pdf_bytes (bytes): PDF page data.
+            source (str or bytes): PDF file path, URL, or bytes.
+            page_number (int): The page number to convert (1-based).
 
         Returns:
-            bytes: PNG image data.
+            bytes or None: PNG image data, or None if not found or error.
         """
-        pdf = Image.open(BytesIO(pdf_bytes))
-        png_bytes = BytesIO()
-        pdf.save(png_bytes, format="PNG")
-        return png_bytes.getvalue()
+        pdf_bytes = None
+        if isinstance(source, bytes):
+            pdf_bytes = source
+        elif isinstance(source, str):
+            if source.startswith('http://') or source.startswith('https://'):
+                try:
+                    resp = requests.get(source)
+                    resp.raise_for_status()
+                    pdf_bytes = resp.content
+                except Exception as e:
+                    print(f"Error downloading PDF from URL: {e}")
+                    return None
+            else:
+                try:
+                    with open(source, 'rb') as file:
+                        pdf_bytes = file.read()
+                except Exception as e:
+                    print(f"Error reading PDF from file: {e}")
+                    return None
+        else:
+            print("Unsupported source type for PDF input.")
+            return None
+        try:
+            pages = convert_from_bytes(pdf_bytes, fmt="png", first_page=page_number, last_page=page_number)
+            if pages:
+                png_bytes_io = BytesIO()
+                pages[0].save(png_bytes_io, format="PNG")
+                return png_bytes_io.getvalue()
+        except Exception as e:
+            print(f"Error converting PDF page to PNG: {e}")
+        return None
 
     def get_pdf_page_count(self, pdf_bytes):
         """
@@ -122,7 +152,7 @@ class OCRManager:
     
     def ocr_using_document_ai(self, base64_encoded_file, cost_per_page=0.03):
         """
-        Processes an image or PDF file using Google Document AI OCR, applying image enhancement for better readability.
+        Processes an image or PDF file using Google Document AI OCR. If input is image, converts to PDF bytes.
         Supports multi-page PDFs by processing each page individually and concatenating the HTML output.
 
         Args:
@@ -139,67 +169,55 @@ class OCRManager:
                 client_options=ClientOptions(api_endpoint=f"{self.GOOGLE_CLOUD_LOCATION}-documentai.googleapis.com")
             )
             name = client.processor_path(self.GOOGLE_CLOUD_PROJECT_ID, self.GOOGLE_CLOUD_LOCATION, self.GOOGLE_CLOUD_PROCESSOR_ID)
-            img_bytes = base64.b64decode(base64_encoded_file)
-            mime_type = None
+            file_bytes = base64.b64decode(base64_encoded_file)
             html_outputs = []
             num_pages = 1
+            mime_type = "application/pdf"
+            is_image = False
             try:
-                im = Image.open(BytesIO(img_bytes))
-                fmt = im.format.lower()
-                if fmt == "png":
-                    mime_type = "image/png"
-                elif fmt == "jpeg":
-                    mime_type = "image/jpeg"
-                elif fmt == "tiff":
-                    mime_type = "image/tiff"
-                else:
-                    mime_type = "application/octet-stream"
-                enhanced_bytes = self.make_img_more_readable(img_bytes)
+                im = Image.open(BytesIO(file_bytes))
+                is_image = True
+            except Exception:
+                is_image = False
+            if is_image:
+                enhanced_img_bytes = self.make_img_more_readable(file_bytes)
+                pdf_bytes = self._png_bytes_to_pdf_bytes(enhanced_img_bytes)
+            else:
+                try:
+                    pages = convert_from_bytes(file_bytes, fmt="png")
+                    enhanced_pngs = []
+                    for page in pages:
+                        png_bytes_io = BytesIO()
+                        page.save(png_bytes_io, format="PNG")
+                        enhanced_png = self.make_img_more_readable(png_bytes_io.getvalue())
+                        enhanced_pngs.append(enhanced_png)
+                    # Convert enhanced PNGs back to PDF
+                    pdf_images = [Image.open(BytesIO(png)) for png in enhanced_pngs]
+                    out_pdf = BytesIO()
+                    if pdf_images:
+                        pdf_images[0].save(out_pdf, format="PDF", save_all=True, append_images=pdf_images[1:], resolution=300.0)
+                        pdf_bytes = out_pdf.getvalue()
+                    else:
+                        pdf_bytes = file_bytes
+                except Exception as e:
+                    print(f"Error enhancing PDF pages: {e}")
+                    pdf_bytes = file_bytes
+            try:
+                num_pages = self.get_pdf_page_count(pdf_bytes)
+            except Exception:
+                num_pages = 1
+            try:
                 req = documentai.ProcessRequest(
                     name=name,
-                    raw_document=documentai.RawDocument(content=enhanced_bytes, mime_type=mime_type),
+                    raw_document=documentai.RawDocument(content=pdf_bytes, mime_type=mime_type),
                 )
                 res = client.process_document(request=req)
                 html_output = self._docai_blocks_to_html(res.document)
                 html_outputs.append(html_output)
-                num_pages = 1
-            except Exception:
-                mime_type = "application/pdf"
-                try:
-                    from pdf2image import convert_from_bytes
-                    pages = convert_from_bytes(img_bytes, fmt="png")
-                    if pages:
-                        num_pages = len(pages)
-                        for page in pages:
-                            png_bytes_io = BytesIO()
-                            page.save(png_bytes_io, format="PNG")
-                            png_bytes = png_bytes_io.getvalue()
-                            enhanced_bytes = self.make_img_more_readable(png_bytes)
-                            req = documentai.ProcessRequest(
-                                name=name,
-                                raw_document=documentai.RawDocument(content=enhanced_bytes, mime_type="image/png"),
-                            )
-                            res = client.process_document(request=req)
-                            html_output = self._docai_blocks_to_html(res.document)
-                            html_outputs.append(html_output)
-                    else:
-                        num_pages = 1
-                        req = documentai.ProcessRequest(
-                            name=name,
-                            raw_document=documentai.RawDocument(content=img_bytes, mime_type=mime_type),
-                        )
-                        res = client.process_document(request=req)
-                        html_output = self._docai_blocks_to_html(res.document)
-                        html_outputs.append(html_output)
-                except Exception:
-                    num_pages = 1
-                    req = documentai.ProcessRequest(
-                        name=name,
-                        raw_document=documentai.RawDocument(content=img_bytes, mime_type=mime_type),
-                    )
-                    res = client.process_document(request=req)
-                    html_output = self._docai_blocks_to_html(res.document)
-                    html_outputs.append(html_output)
+            except Exception as e:
+                print(f"Error in Document AI OCR: {e}")
+                self.cost = 0
+                return None
             self.cost = num_pages * cost_per_page
             return "\n".join(html_outputs)
         except Exception as e:

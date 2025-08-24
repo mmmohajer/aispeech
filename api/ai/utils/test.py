@@ -1,3 +1,4 @@
+import base64
 from pydoc import text
 from django.conf import settings
 import json
@@ -6,6 +7,7 @@ from google.cloud import texttospeech, speech
 
 from ai.utils.open_ai_manager import OpenAIManager
 from ai.utils.google_ai_manager import GoogleAIManager
+from ai.utils.ocr_manager import OCRManager
 
 def test_get_response():
     manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
@@ -122,5 +124,18 @@ def test_google_stt():
     print(manager.get_cost())
     print(f"Transcribed Text: {text}")
 
+def test_document_ai_ocr():
+    manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'The Data Science Handbook.pdf')
+    png_bytes = manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=21)
+    html_output = manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+    with open(os.path.join("/websocket_tmp/texts/", 'document_ai_output.html'), 'w', encoding='utf-8') as file:
+        file.write(html_output)
+    print(f"Successfully Done!")
+
 def test_ai_manager():
-    test_google_stt()
+    test_document_ai_ocr()
