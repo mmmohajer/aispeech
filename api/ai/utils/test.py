@@ -137,5 +137,177 @@ def test_document_ai_ocr():
         file.write(html_output)
     print(f"Successfully Done!")
 
+def test_google_tts_farsi():
+    manager = GoogleAIManager(api_key=settings.GOOGLE_API_KEY)
+    text = (
+        """<speak>\n"
+        "سلام، گوگل!\n"
+        "<break time=\"500ms\"/>\n"
+        "<emphasis level=\"strong\">این یک نمایش از سنتز گفتار است.</emphasis>\n"
+        "<break time=\"300ms\"/>\n"
+        "<prosody pitch=\"+2st\" rate=\"slow\">شما می‌توانید با برچسب‌های SSML، گام و سرعت گفتار را کنترل کنید.</prosody>\n"
+        "<break time=\"400ms\"/>\n"
+        "<prosody pitch=\"-2st\" rate=\"fast\">حالا، بیایید یک گام پایین‌تر و سرعت سریع‌تر را امتحان کنیم.</prosody>\n"
+        "<break time=\"300ms\"/>\n"
+        "<emphasis level=\"moderate\">SSML خروجی TTS شما را بیان‌گرتر می‌کند!</emphasis>\n"
+        "<break time=\"500ms\"/>\n"
+        "متشکرم که گوش دادید.\n"
+        "</speak>"""
+    )
+    audio_bytes = manager.tts(text=text, voice_name="fa-IR-Standard-A", audio_encoding=texttospeech.AudioEncoding.MP3, language_code="fa-IR")
+    audio_file_path = os.path.join("/websocket_tmp/google_tts", 'tts_audio_fa.mp3')
+    with open(audio_file_path, 'wb') as file:
+        file.write(audio_bytes)
+    print(f"Successfully Done")
+
+def list_voices():
+     # test_google_tts_farsi()
+    client = texttospeech.TextToSpeechClient()
+    voices = client.list_voices()
+    voices_list = []
+    for voice in voices.voices:
+        voice_info = {
+            "name": voice.name,
+            "languages": list(voice.language_codes),  # Convert to list for JSON serialization
+            "gender": texttospeech.SsmlVoiceGender(voice.ssml_gender).name
+        }
+        voices_list.append(voice_info)
+    with open(os.path.join("/websocket_tmp/google_tts", "voices.json"), "w", encoding="utf-8") as file:
+        json.dump(voices_list, file, ensure_ascii=False, indent=2)
+    print(f"Wrote {len(voices_list)} voices to voices.json")
+
+def test_summarizer():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+        page_text = open_ai_manager.build_simple_text_from_html(html_output)
+        pdf_texts.append(page_text)
+    text_to_summarize = "".join(pdf_texts)
+    print(f"\n\nLength: {len(text_to_summarize)}\n\n")
+    summary = open_ai_manager.summarize(text=text_to_summarize, max_length=1000, max_chunk_size=15000)
+    with open(os.path.join("/websocket_tmp/texts/", 'summary.txt'), 'w', encoding='utf-8') as file:
+        file.write(summary)
+
+def test_summarizer_for_translation():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+        page_text = open_ai_manager.build_simple_text_from_html(html_output)
+        pdf_texts.append(page_text)
+    text_to_summarize = "".join(pdf_texts)
+    print(f"\n\nLength: {len(text_to_summarize)}\n\n")
+    summary = open_ai_manager.summarize_for_translation(text=text_to_summarize, max_length=5000, max_chunk_size=15000)
+    with open(os.path.join("/websocket_tmp/texts/", 'summary_translation.txt'), 'w', encoding='utf-8') as file:
+        file.write(summary)
+
+def test_translation():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    translate = open_ai_manager.translate(html_to_translate, target_language="en")
+    with open(os.path.join("/websocket_tmp/texts/", 'translation.html'), 'w', encoding='utf-8') as file:
+        file.write(translate)
+
+def test_summarizer_for_manipulation():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+        page_text = open_ai_manager.build_simple_text_from_html(html_output)
+        pdf_texts.append(page_text)
+    text_to_summarize = "".join(pdf_texts)
+    print(f"\n\nLength: {len(text_to_summarize)}\n\n")
+    summary = open_ai_manager.summarize_for_manipulation(text=text_to_summarize, manipulation_type="improve_fluency_and_make_it_academic", max_length=5000, max_chunk_size=15000)
+    with open(os.path.join("/websocket_tmp/texts/", 'summary_manipulation.txt'), 'w', encoding='utf-8') as file:
+        file.write(summary)
+
+def test_manipulation():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    translate = open_ai_manager.manipulate_text(html_to_translate, manipulation_type="improve_fluency_and_make_it_academic", target_language="en")
+    with open(os.path.join("/websocket_tmp/texts/", 'manipulation.html'), 'w', encoding='utf-8') as file:
+        file.write(translate)
+
 def test_ai_manager():
-    test_document_ai_ocr()
+   test_manipulation()

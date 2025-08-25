@@ -1,8 +1,15 @@
 export const handleMessage = (event) => {
   const data = JSON.parse(event.data);
+  console.log("Received data from WebSocket:", data);
   //   console.log("Received data from WebSocket:", data);
   if (data?.text) {
     console.log(data.text);
+  }
+  if (data?.["Google STT"]) {
+    console.log("Google STT:", data["Google STT"]);
+  }
+  if (data?.["OpenAI STT"]) {
+    console.log("OpenAI STT:", data["OpenAI STT"]);
   }
   //   if (data.type === "audio") {
   //     const chunkId = data.chunk_id;

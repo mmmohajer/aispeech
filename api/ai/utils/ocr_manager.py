@@ -5,6 +5,7 @@ from google.cloud import vision, documentai
 from google.api_core.client_options import ClientOptions
 from pdf2image import convert_from_bytes
 import requests
+from PyPDF2 import PdfReader
 
 from ai.utils.doc_ai_managr import DocAIManager
 
@@ -129,8 +130,8 @@ class OCRManager:
         Returns:
             int: Number of pages in the PDF.
         """
-        pdf = Image.open(BytesIO(pdf_bytes))
-        return pdf.n_frames
+        reader = PdfReader(BytesIO(pdf_bytes))
+        return len(reader.pages)
 
     def make_img_more_readable(self, img_bytes):
         """

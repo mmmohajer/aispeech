@@ -77,7 +77,7 @@ const ChatBox = ({ socketRefManager }) => {
                 // }}
                 recording={recording}
                 setRecording={setRecording}
-                chunkDurationInSecond={5}
+                chunkDurationInSecond={60}
               />
               <Button
                 btnText={recording ? "Stop Recording" : "Start Recording"}

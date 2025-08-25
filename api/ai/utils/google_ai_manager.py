@@ -188,7 +188,7 @@ class GoogleAIManager(BaseAIManager):
             texts.append(result.alternatives[0].transcript)
         return " ".join(texts)
 
-    def tts(self, text, voice_name="en-US-Wavenet-D", audio_encoding=texttospeech.AudioEncoding.MP3):
+    def tts(self, text, voice_name="en-US-Wavenet-D", audio_encoding=texttospeech.AudioEncoding.MP3, language_code="en-US"):
         """
         Perform text-to-speech using Google Cloud Text-to-Speech API.
 
@@ -196,6 +196,7 @@ class GoogleAIManager(BaseAIManager):
             text (str): The text to convert to speech.
             voice_name (str): The name of the voice to use. Default is "en-US-Wavenet-D".
             audio_encoding (str): The audio encoding format. Default is MP3.
+            language_code (str): The language code for the voice. Default is "en-US".
 
         Returns:
             bytes: The audio content in the specified format.
@@ -207,7 +208,7 @@ class GoogleAIManager(BaseAIManager):
             input_text = texttospeech.SynthesisInput(text=text)
         voice = texttospeech.VoiceSelectionParams(
             name=voice_name,
-            language_code="en-US",
+            language_code=language_code,
         )
         audio_config = texttospeech.AudioConfig(
             audio_encoding=audio_encoding,
