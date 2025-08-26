@@ -8,6 +8,7 @@ from google.cloud import texttospeech, speech
 from ai.utils.open_ai_manager import OpenAIManager
 from ai.utils.google_ai_manager import GoogleAIManager
 from ai.utils.ocr_manager import OCRManager
+from ai.utils.audio_manager import AudioManager
 
 def test_get_response():
     manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
@@ -296,7 +297,6 @@ def test_manipulation():
     with open(pdf_file_path, 'rb') as pdf_file:
         pdf_bytes = pdf_file.read()
     number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
-    number_of_pages = 1
     pdf_texts = []
     for page in range(1, number_of_pages + 1):
         print(f"Processing page {page}...")
@@ -306,8 +306,148 @@ def test_manipulation():
         pdf_texts.append(html_output)
     html_to_translate = "".join(pdf_texts)
     translate = open_ai_manager.manipulate_text(html_to_translate, manipulation_type="improve_fluency_and_make_it_academic", target_language="en")
-    with open(os.path.join("/websocket_tmp/texts/", 'manipulation.html'), 'w', encoding='utf-8') as file:
+    with open(os.path.join("/websocket_tmp/texts/", 'manipulation_full.html'), 'w', encoding='utf-8') as file:
         file.write(translate)
 
+def test_html_to_pdf():
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    with open(os.path.join("/websocket_tmp/texts/", 'manipulation_full.html'), 'r', encoding='utf-8') as file:
+        html_content = file.read()
+    pdf_bytes = ocr_manager.convert_html_to_pdf(html_content)
+    with open("/websocket_tmp/texts/manipulation_full.pdf", "wb") as f:
+        f.write(pdf_bytes)
+
+def test_q_and_a_generation():
+    pdf_path = os.path.join("/websocket_tmp/zahra/", 'zahra.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/zahra/", 'zahra.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    # number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+    q_a_list = open_ai_manager.generate_q_and_a_from_text(html_to_translate, target_language="en", max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=2500, max_q_and_a_tokens=5000)
+    with open("/websocket_tmp/texts/q_and_a.json", "w", encoding="utf-8") as f:
+        json.dump(q_a_list, f, ensure_ascii=False, indent=2)
+
+def test_multi_choice_q_generation():
+    pdf_path = os.path.join("/websocket_tmp/zahra/", 'zahra.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/zahra/", 'zahra.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    # number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+    q_a_list = open_ai_manager.generate_multiple_choice_questions_from_text(html_to_translate, target_language="en", max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=1000, max_mcq_tokens=5000)
+    with open("/websocket_tmp/zahra/multi_choice.json", "w", encoding="utf-8") as f:
+        json.dump(q_a_list, f, ensure_ascii=False, indent=2)
+
+def test_teaching_content():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+    q_a_list = open_ai_manager.build_teaching_content_for_a_text(html_to_translate, target_language="en", max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=1000, max_teaching_tokens=5000)
+    with open("/websocket_tmp/texts/teaching.json", "w", encoding="utf-8") as f:
+        json.dump(q_a_list, f, ensure_ascii=False, indent=2)
+
+def test_build_rag_materials_for_text():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+    rag_materials = open_ai_manager.build_materials_for_rag(text=html_to_translate)
+    with open("/websocket_tmp/texts/rag.json", "w", encoding="utf-8") as f:
+        json.dump(rag_materials, f, ensure_ascii=False, indent=2)
+
+def test_advanced_stt():
+    audio_path = os.path.join("/websocket_tmp/me/", 'chunk_0.wav')
+    with open(audio_path, 'rb') as file:
+        audio_bytes = file.read()
+    audio_manager = AudioManager()
+    def progress_callback(chunk_index, total_chunks, improved_chunk):
+        print(f"Progress: {chunk_index + 1}/{total_chunks} - {improved_chunk[:30]}...")
+    result = audio_manager.advanced_stt(audio_bytes, progress_callback=progress_callback)
+    with open("/websocket_tmp/me/advanced_stt_result.txt", "w", encoding="utf-8") as f:
+        f.write(result)
+
+def test_convert_audio_to_text():
+    audio_path = os.path.join("/websocket_tmp/me/", 'long.m4a')
+    with open(audio_path, 'rb') as file:
+        audio_bytes = file.read()
+    audio_manager = AudioManager()
+    def progress_callback(chunk_index, total_chunks, improved_chunk):
+        print(f"Progress: {chunk_index + 1}/{total_chunks} - {improved_chunk[:30]}...")
+    def chunk_progress_callback(chunk_index, total_chunks, chunk_text):
+        print(f"Chunk Progress: {chunk_index + 1}/{total_chunks} - {chunk_text[:30]}...")
+    result = audio_manager.convert_audio_to_text(audio_bytes, chunk_duration_sec=30, progress_callback=progress_callback, input_format='m4a', chunk_progress_callback=chunk_progress_callback)
+    with open("/websocket_tmp/me/convert_audio_to_text_result.html", "w", encoding="utf-8") as f:
+        f.write(result)
+
 def test_ai_manager():
-   test_manipulation()
+   test_multi_choice_q_generation()

@@ -6,8 +6,10 @@ from google.api_core.client_options import ClientOptions
 from pdf2image import convert_from_bytes
 import requests
 from PyPDF2 import PdfReader
+from weasyprint import HTML
 
 from ai.utils.doc_ai_managr import DocAIManager
+from ai.utils.chunk_manager import ChunkPipeline
 
 class OCRManager:
     def __init__(self, google_cloud_project_id, google_cloud_location, google_cloud_processor_id):
@@ -58,6 +60,19 @@ class OCRManager:
         blocks = getattr(layout, "blocks", [])
         doc_ai_manager = DocAIManager()
         return doc_ai_manager.render_html_blocks(blocks)
+
+    def convert_html_to_pdf(self, html_content):
+        """
+        Converts HTML content to PDF bytes.
+
+        Args:
+            html_content (str): HTML content to convert.
+
+        Returns:
+            bytes: PDF file data.
+        """
+        pdf_bytes = HTML(string=html_content).write_pdf()
+        return pdf_bytes
 
     def get_cost(self):
         """
@@ -119,7 +134,7 @@ class OCRManager:
         except Exception as e:
             print(f"Error converting PDF page to PNG: {e}")
         return None
-
+    
     def get_pdf_page_count(self, pdf_bytes):
         """
         Returns the number of pages in a PDF file.
@@ -225,3 +240,20 @@ class OCRManager:
             print(f"Error in Document AI OCR: {e}")
             self.cost = 0
             return None
+    
+    def read_pdf_bytes(self, pdf_bytes, progress_callback=None):
+        number_of_pages = self.get_pdf_page_count(pdf_bytes)
+        pdf_texts = []
+        for page in range(1, number_of_pages + 1):
+            msg = f"Processing page {page}/{number_of_pages}..."
+            if progress_callback:
+                progress_callback(page=page, total=number_of_pages)
+            else:
+                print(msg)
+            png_bytes = self.convert_pdf_page_to_png_bytes(pdf_bytes, page_number=page)
+            html_output = self.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+            pdf_texts.append(html_output)
+        html_src = "".join(pdf_texts)
+        chunk_pipeline = ChunkPipeline()
+        simple_text = chunk_pipeline.process(html_src, "get_text")
+        return html_src, simple_text

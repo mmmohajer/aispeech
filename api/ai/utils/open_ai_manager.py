@@ -284,3 +284,60 @@ class OpenAIManager(BaseAIManager):
         image_price = pricing.get("image_per_1_image", 0)
         self.cost += image_price
         return image_bytes
+    
+    def build_materials_for_rag(self, text, max_chunk_size=1000, embedding_model="text-embedding-3-large", progress_callback=None):
+        """
+        Build materials for RAG (Retrieval-Augmented Generation):
+        For each chunk, generate:
+        {
+            "html": "...",        # HTML output for the chunk
+            "text": "...",        # Plain text output for the chunk
+            "vector": [...]        # Vector format (embedding-ready text for OpenAI query)
+        }
+        Args:
+            text (str): The input text (can be HTML)
+            max_chunk_size (int): Max size of each chunk. Default 1000.
+            embedding_model (str): OpenAI embedding model name. Default "text-embedding-3-large".
+        Returns:
+            list: List of dicts for all chunks
+        """
+        chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
+        materials = []
+        for i, chunk in enumerate(chunks):
+            msg = f"Processing chunk {i+1}/{len(chunks)} for embeddings..."
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i+1, total=len(chunks))
+            else:
+                print(msg)
+            html_output = chunk["html"]
+            text_output = chunk["text"]
+            embedding_text = text_output
+            try:
+                response = self.OPEN_AI_CLIENT.embeddings.create(
+                    model=embedding_model,
+                    input=embedding_text
+                )
+                vector_output = response.data[0].embedding if response and response.data and response.data[0].embedding else []
+                usage = getattr(response, "usage", None)
+                if usage:
+                    input_tokens = getattr(usage, "prompt_tokens", 0)
+                else:
+                    input_tokens = max(1, len(embedding_text) // 4)
+                pricing = self.OPENAI_PRICING.get(embedding_model, {})
+                input_price = pricing.get("input_per_1k_token", 0)
+                cost = (input_tokens / 1000) * input_price
+                self.cost += cost
+            except Exception as e:
+                err_msg = f"Error generating embedding: {e}"
+                if progress_callback:
+                    progress_callback(err_msg, chunk=chunk, index=i+1, total=len(chunks))
+                else:
+                    print(err_msg)
+                vector_output = []
+            materials.append({
+                "chunk_number": i + 1,
+                "html": html_output,
+                "text": text_output,
+                "vector": vector_output
+            })
+        return materials

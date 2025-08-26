@@ -127,7 +127,7 @@ class BaseAIManager:
         """
         raise NotImplementedError("Subclasses must implement generate_response.")
     
-    def summarize(self, text, max_length=1000, max_chunk_size=1000):
+    def summarize(self, text, max_length=1000, max_chunk_size=1000, progress_callback=None):
         """
         Iteratively summarize a long text by processing it chunk by chunk and accumulating the summary.
         For each chunk, the method combines the previous summary (if any) with the current chunk and asks the AI model to summarize them together.
@@ -149,7 +149,11 @@ class BaseAIManager:
         i = 0
         for chunk in chunks:
             i += 1
-            print(f"Processing chunk {i}/{len(chunks)}")
+            msg = f"Processing chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
             input_text = (summary + "\n" + chunk["text"]).strip() if summary else chunk["text"]
             messages = [
                 {"role": "system", "content": "You are a summarization expert. Summarize the following text."},
@@ -163,7 +167,7 @@ class BaseAIManager:
             summary = response
         return summary
     
-    def summarize_for_translation(self, text, max_length=1000, max_chunk_size=1000):
+    def summarize_for_translation(self, text, max_length=1000, max_chunk_size=1000, progress_callback=None):
         """
         Iteratively summarize and interpret a long text chunk by chunk, accumulating summary and clarifications for translation.
         For each chunk, instruct the AI to:
@@ -188,7 +192,11 @@ class BaseAIManager:
         i = 0
         for chunk in chunks:
             i += 1
-            print(f"Processing chunk {i}/{len(chunks)}")
+            msg = f"Processing chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
             input_text = (summary + "\n" + chunk["text"]).strip() if summary else chunk["text"]
             system_prompt = (
                 "You are a translation assistant. The purpose of this summarization is to provide hints and context needed for better translation of words, phrases, and expressions used in the text, not a general summary. "
@@ -197,6 +205,7 @@ class BaseAIManager:
                 "2. Identify any ambiguous phrases or unclear meanings and note them. "
                 "3. If you now understand the meaning of a previously ambiguous phrase, clarify it in this summary. "
                 "4. Track and update clarifications as more context is available. "
+                "5. Because the text comes from OCR, some words/characters might not be captured properly. If you are suspicious about a word, mention it, suggest what the correct word could be, and write it in a highlighted format (ALL UPPERCASE). In the translation, you can use the suggested correction. "
                 "Output only the summary and clarifications that help with translation."
             )
             messages = [
@@ -205,7 +214,8 @@ class BaseAIManager:
             ]
             prompt = (
                 "Summarize and interpret the following text in at most {max_length} tokens. "
-                "Identify ambiguous phrases and clarify them if possible as context improves.\n\n{input_text}"
+                "Identify ambiguous phrases and clarify them if possible as context improves. "
+                "If you are suspicious about a word due to OCR errors, mention it, suggest the correct word, and write it in ALL UPPERCASE for highlighting.\n\n{input_text}"
             )
             if self.ai_type == "open_ai":
                 response = self.generate_response(max_token=max_length, messages=messages)
@@ -214,7 +224,7 @@ class BaseAIManager:
             summary = response
         return summary
     
-    def summarize_for_manipulation(self, text, manipulation_type="improve_fluency", max_length=1000, max_chunk_size=1000):
+    def summarize_for_manipulation(self, text, manipulation_type="improve_fluency", max_length=1000, max_chunk_size=1000, progress_callback=None):
         """
         Build a summary and guidance for AI to manipulate documentation, with options for tone, style, and improvement hints.
         For each chunk, instruct the AI to:
@@ -240,7 +250,11 @@ class BaseAIManager:
         i = 0
         for chunk in chunks:
             i += 1
-            print(f"Processing chunk {i}/{len(chunks)}")
+            msg = f"Processing chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
             input_text = (summary + "\n" + chunk["text"]).strip() if summary else chunk["text"]
             system_prompt = (
                 f"You are a documentation improvement assistant. The purpose of this summarization is to provide hints and guidance for manipulating the text to better match the desired style: {manipulation_type}. "
@@ -253,6 +267,7 @@ class BaseAIManager:
                 "6. If manipulation_type is 'poetic', suggest ways to make the text more lyrical or artistic. "
                 "7. For any other manipulation_type, provide specific guidance to achieve the desired style. "
                 "8. After each paragraph, add hints about weaknesses and how to improve the text. "
+                "9. Because the text comes from OCR, some words/characters might not be captured properly. If you are suspicious about a word, mention it, suggest what the correct word could be, and write it in a highlighted format (ALL UPPERCASE). In the manipulation, you can use the suggested correction. "
                 "Output only the summary and actionable guidance for manipulation."
             )
             messages = [
@@ -272,7 +287,7 @@ class BaseAIManager:
             summary = response
         return summary
 
-    def translate(self, text, target_language, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_length_for_translation_summary=5000, max_chunk_size_for_translation_summary=15000, max_chunk_size=1000, max_translation_tokens=5000):
+    def translate(self, text, target_language, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_length_for_translation_summary=5000, max_chunk_size_for_translation_summary=15000, max_chunk_size=1000, max_translation_tokens=5000, progress_callback=None):
         """
         Translate text to the target language using context-aware chunking and translation.
 
@@ -305,7 +320,11 @@ class BaseAIManager:
         chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
         translated_chunks = []
         for i, chunk in enumerate(chunks):
-            print(f"Translating chunk {i}/{len(chunks)}")
+            msg = f"Translating chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
             previous_chunk = chunks[i-1]["html"] if i > 0 else ""
             cur_chunk = chunk["html"]
             next_chunk = chunks[i+1]["html"] if i < len(chunks)-1 else ""
@@ -342,7 +361,7 @@ class BaseAIManager:
             translated_chunks.append(translated)
         return "".join(translated_chunks)
 
-    def manipulate_text(self, text, manipulation_type="improve_fluency", target_language=None, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_length_for_manipulation_summary=5000, max_chunk_size_for_manipulation_summary=15000, max_chunk_size=1000, max_manipulation_tokens=5000):
+    def manipulate_text(self, text, manipulation_type="improve_fluency", target_language=None, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_length_for_manipulation_summary=5000, max_chunk_size_for_manipulation_summary=15000, max_chunk_size=1000, max_manipulation_tokens=5000, progress_callback=None):
         """
         Manipulate the input text using context-aware chunking, summaries, and generate HTML output with allowed tags and placeholders.
 
@@ -373,7 +392,11 @@ class BaseAIManager:
         manipulated_chunks = []
         joint_manipulated_summary = ""
         for i, chunk in enumerate(chunks):
-            print(f"Manipulating chunk {i}/{len(chunks)}")
+            msg = f"Manipulating chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
             previous_chunk = chunks[i-1]["html"] if i > 0 else ""
             cur_chunk = chunk["html"]
             next_chunk = chunks[i+1]["html"] if i < len(chunks)-1 else ""
@@ -418,3 +441,237 @@ class BaseAIManager:
             manipulated_chunks.append(manipulated)
             joint_manipulated_summary = self.summarize(joint_manipulated_summary)
         return "".join(manipulated_chunks)
+
+    def generate_q_and_a_from_text(self, text, target_language=None, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=2500, max_q_and_a_tokens=5000, progress_callback=None):
+        """
+        Generate Q&A pairs from the text to help people understand the context, prepare for exams/interviews, and cover important concepts.
+
+        The method first creates a general summary, then splits the text into chunks. For each chunk, it asks the AI to generate a list of Q&A JSONs:
+        [{"question": "STH", "answer": "STH"}, ...]
+        Only meaningful, teaching, or explanatory parts should generate Q&A; unimportant sections (e.g., table of contents) should return an empty list.
+        For each chunk, the AI receives the last chunk, current chunk, next chunk, general summary, and the summary of previous Q&As for context.
+
+        All questions and answers must be written in the target language if specified.
+
+        Args:
+            text (str): The input text (book, article, etc.)
+            target_language (str or None): If set, write all questions and answers in this language (e.g., 'en', 'fr', 'fa'). If None, keep the original language.
+            max_length_for_general_summary (int): Max tokens for general summary. Default 2000.
+            max_chunk_size_for_general_summary (int): Max chunk size for general summary. Default 15000.
+            max_chunk_size (int): Max size of each chunk for Q&A. Default 1000.
+            max_q_and_a_tokens (int): Max tokens for each Q&A step. Default 2000.
+
+        Returns:
+            list: List of Q&A dicts for all chunks.
+
+        Example:
+            q_and_a_list = manager.generate_q_and_a_from_text(text, target_language='fr')
+        """
+        general_summary = self.summarize(text, max_length=max_length_for_general_summary, max_chunk_size=max_chunk_size_for_general_summary)
+        chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
+        all_q_and_a = []
+        previous_q_and_a_summary = ""
+        for i, chunk in enumerate(chunks):
+            msg = f"Generating Q&A for chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
+            previous_chunk = chunks[i-1]["html"] if i > 0 else ""
+            cur_chunk = chunk["html"]
+            next_chunk = chunks[i+1]["html"] if i < len(chunks)-1 else ""
+            system_prompt = (
+                "You are an expert educator and exam/interview designer. Your task is to generate a list of Q&A pairs in JSON format for the current chunk, to help people understand the context, prepare for exams/interviews, and cover important concepts.\n"
+                "Only generate Q&A for meaningful, teaching, or explanatory parts. If the chunk is not important (e.g., table of contents, filler, or lacks concepts), return an empty list.\n"
+                "For each Q&A, use the format: {\"question\": \"...\", \"answer\": \"...\"}.\n"
+                + (f"All questions and answers must be written in {target_language}.\n" if target_language else "")
+                + "You are given the general summary, previous chunk, current chunk, next chunk, for context. These inputs are only helpers to give you better insight and help you analyze the current chunk more effectively.\n"
+                + "Output is ONLY for the current chunk. Output only the list of Q&A JSONs."
+            )
+            user_content = (
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ]
+            prompt = (
+                f"{system_prompt}\n"
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            if self.ai_type == "open_ai":
+                response = self.generate_response(max_token=max_q_and_a_tokens, messages=messages)
+            elif self.ai_type == "google":
+                response = self.generate_response(max_token=max_q_and_a_tokens, prompt=prompt)
+            try:
+                q_and_a_list = eval(response) if isinstance(response, str) else response
+                if not isinstance(q_and_a_list, list):
+                    q_and_a_list = []
+            except Exception:
+                q_and_a_list = []
+            all_q_and_a.extend(q_and_a_list)
+        return all_q_and_a
+    
+    def generate_multiple_choice_questions_from_text(self, text, target_language=None, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=2500, max_mcq_tokens=5000, progress_callback=None):
+        """
+        Generate multiple-choice questions (MCQs) from the text. Each question has 4 options, only one valid answer.
+
+        The output format for each MCQ:
+        {
+            "question": "Q",
+            "options": [
+                {"option": "OPTION1", "is_correct": 1},
+                {"option": "OPTION2", "is_correct": 0},
+                {"option": "OPTION3", "is_correct": 0},
+                {"option": "OPTION4", "is_correct": 0}
+            ]
+        }
+        If the correct answer is "all of the above", only that option is marked as correct and the rest as incorrect.
+        All questions and options must be written in the target language if specified.
+
+        Args:
+            text (str): The input text (book, article, etc.)
+            target_language (str or None): If set, write all questions and options in this language (e.g., 'en', 'fr', 'fa'). If None, keep the original language.
+            max_length_for_general_summary (int): Max tokens for general summary. Default 2000.
+            max_chunk_size_for_general_summary (int): Max chunk size for general summary. Default 15000.
+            max_chunk_size (int): Max size of each chunk for MCQ. Default 2500.
+            max_mcq_tokens (int): Max tokens for each MCQ step. Default 5000.
+
+        Returns:
+            list: List of MCQ dicts for all chunks.
+
+        Example:
+            mcq_list = manager.generate_multiple_choice_questions_from_text(text, target_language='en')
+        """
+        general_summary = self.summarize(text, max_length=max_length_for_general_summary, max_chunk_size=max_chunk_size_for_general_summary)
+        chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
+        all_mcq = []
+        for i, chunk in enumerate(chunks):
+            msg = f"Generating MCQ for chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
+            previous_chunk = chunks[i-1]["html"] if i > 0 else ""
+            cur_chunk = chunk["html"]
+            next_chunk = chunks[i+1]["html"] if i < len(chunks)-1 else ""
+            system_prompt = (
+                "You are an expert educator and exam/interview designer. Your task is to generate a list of multiple-choice questions (MCQs) in JSON format for the current chunk, to help people understand the context, prepare for exams/interviews, and cover important concepts.\n"
+                "Each question must have exactly 4 options, and only one option must be marked as correct (is_correct: 1), the rest as incorrect (is_correct: 0).\n"
+                "If the correct answer is 'all of the above', only that option is marked as correct and the rest as incorrect.\n"
+                "For each MCQ, use the format: {\"question\": \"...\", \"options\": [{\"option\": \"...\", \"is_correct\": 1/0}, ...]}\n"
+                + (f"All questions and options must be written in {target_language}.\n" if target_language else "")
+                + "Only generate MCQs for meaningful, teaching, or explanatory parts. If the chunk is not important (e.g., table of contents, filler, or lacks concepts), return an empty list.\n"
+                + "You are given the general summary, previous chunk, current chunk, next chunk, for context. These inputs are only helpers to give you better insight and help you analyze the current chunk more effectively.\n"
+                + "Output is ONLY for the current chunk. Output only the list of MCQ JSONs."
+            )
+            user_content = (
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ]
+            prompt = (
+                f"{system_prompt}\n"
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            if self.ai_type == "open_ai":
+                response = self.generate_response(max_token=max_mcq_tokens, messages=messages)
+            elif self.ai_type == "google":
+                response = self.generate_response(max_token=max_mcq_tokens, prompt=prompt)
+            try:
+                mcq_list = eval(response) if isinstance(response, str) else response
+                if not isinstance(mcq_list, list):
+                    mcq_list = []
+            except Exception:
+                mcq_list = []
+            all_mcq.extend(mcq_list)
+        return all_mcq
+    
+    def build_teaching_content_for_a_text(self, text, target_language=None, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=2500, max_teaching_tokens=5000, progress_callback=None):
+        """
+        Build teaching content for a text. For each chunk, generate:
+        {
+            "clarifying_concept_to_teach": "HTML output clarifying the concept",
+            "q_and_a_list": [{"question": "...", "answer": "..."}, ...]
+        }
+        The AI must deeply understand each chunk, clarify the concept in HTML, and provide Q&A pairs that ensure mastery of the concept.
+        All outputs must be in the target language if specified.
+
+        Args:
+            text (str): The input text (book, article, etc.)
+            target_language (str or None): If set, write all outputs in this language (e.g., 'en', 'fr', 'fa'). If None, keep the original language.
+            max_length_for_general_summary (int): Max tokens for general summary. Default 2000.
+            max_chunk_size_for_general_summary (int): Max chunk size for general summary. Default 15000.
+            max_chunk_size (int): Max size of each chunk for teaching. Default 2500.
+            max_teaching_tokens (int): Max tokens for each teaching step. Default 5000.
+
+        Returns:
+            list: List of teaching content dicts for all chunks.
+
+        Example:
+            teaching_content = manager.build_teaching_content_for_a_text(text, target_language='en')
+        """
+        general_summary = self.summarize(text, max_length=max_length_for_general_summary, max_chunk_size=max_chunk_size_for_general_summary)
+        chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
+        all_teaching_content = []
+        for i, chunk in enumerate(chunks):
+            msg = f"Generating teaching content for chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
+            previous_chunk = chunks[i-1]["html"] if i > 0 else ""
+            cur_chunk = chunk["html"]
+            next_chunk = chunks[i+1]["html"] if i < len(chunks)-1 else ""
+            system_prompt = (
+                "You are an expert teacher and educator. For the current chunk, deeply understand the content and generate teaching material as follows:\n"
+                "1. clarifying_concept_to_teach: Write a clear, detailed HTML output that explains the concept, using headings, lists, examples, and formatting to help the user learn.\n"
+                "2. q_and_a_list: Generate a list of Q&A pairs (question and answer) that, if answered correctly, prove the user has mastered the concept.\n"
+                + (f"All outputs must be written in {target_language}.\n" if target_language else "")
+                + "Only generate teaching content for meaningful, teaching, or explanatory parts. If the chunk is not important (e.g., table of contents, filler, or lacks concepts), return an empty list.\n"
+                + "You are given the general summary, previous chunk, current chunk, next chunk, for context. These inputs are only helpers to give you better insight and help you analyze the current chunk more effectively.\n"
+                + "Output is ONLY for the current chunk. Output only the teaching content JSON."
+            )
+            user_content = (
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ]
+            prompt = (
+                f"{system_prompt}\n"
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            if self.ai_type == "open_ai":
+                response = self.generate_response(max_token=max_teaching_tokens, messages=messages)
+            elif self.ai_type == "google":
+                response = self.generate_response(max_token=max_teaching_tokens, prompt=prompt)
+            try:
+                teaching_content = eval(response) if isinstance(response, str) else response
+                if not isinstance(teaching_content, dict):
+                    teaching_content = {}
+            except Exception:
+                teaching_content = {}
+            all_teaching_content.append(teaching_content)
+        return all_teaching_content
