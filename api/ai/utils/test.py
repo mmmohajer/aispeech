@@ -437,17 +437,17 @@ def test_advanced_stt():
         f.write(result)
 
 def test_convert_audio_to_text():
-    audio_path = os.path.join("/websocket_tmp/me/", 'long.m4a')
+    audio_path = os.path.join("/websocket_tmp/me/", 'tavalod.m4a')
     with open(audio_path, 'rb') as file:
         audio_bytes = file.read()
     audio_manager = AudioManager()
     def progress_callback(chunk_index, total_chunks, improved_chunk):
-        print(f"Progress: {chunk_index + 1}/{total_chunks} - {improved_chunk[:30]}...")
+        print(f"Progress: {chunk_index + 1}/{total_chunks}")
     def chunk_progress_callback(chunk_index, total_chunks, chunk_text):
-        print(f"Chunk Progress: {chunk_index + 1}/{total_chunks} - {chunk_text[:30]}...")
-    result = audio_manager.convert_audio_to_text(audio_bytes, chunk_duration_sec=30, progress_callback=progress_callback, input_format='m4a', chunk_progress_callback=chunk_progress_callback)
+        print(f"Chunk Progress: {chunk_index + 1}/{total_chunks}")
+    result = audio_manager.convert_audio_to_text(audio_bytes, chunk_duration_sec=30, do_final_edition=True, progress_callback=progress_callback, input_format='m4a', chunk_progress_callback=chunk_progress_callback)
     with open("/websocket_tmp/me/convert_audio_to_text_result.html", "w", encoding="utf-8") as f:
         f.write(result)
 
 def test_ai_manager():
-   test_multi_choice_q_generation()
+   test_convert_audio_to_text()
