@@ -14,16 +14,17 @@ import {
 } from "@/constants/apiRoutes";
 import { PAGE_ROUTES } from "@/constants/pageRoutes";
 import { setProfile } from "@/reducer/subs/profile";
+import { setAccessToken, clearAccessToken } from "@/reducer/subs/accessToken";
 
 const BaseAppWrapper = ({ isAuthPage = false, children }) => {
   const dispatch = useDispatch();
   const router = useRouter();
   const profile = useSelector((state) => state.profile);
+  const accessToken = useSelector((state) => state.accessToken);
   // --------------------------------------------------------
   // Authentication Handler
   // --------------------------------------------------------
   const refreshTokenRef = useRef("");
-  const [accessToken, setAccessToken] = useState("");
   const [showAuthPage, setShowAuthPage] = useState(false);
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -35,6 +36,7 @@ const BaseAppWrapper = ({ isAuthPage = false, children }) => {
         }
       } else {
         removeLocalStorage("access_token");
+        dispatch(clearAccessToken());
         removeLocalStorage("refresh_token");
         if (!isAuthPage) {
           router.push(PAGE_ROUTES.LOGIN);
@@ -66,7 +68,7 @@ const BaseAppWrapper = ({ isAuthPage = false, children }) => {
   useEffect(() => {
     if (data?.access_token) {
       setLocalStorage("access_token", data.access_token);
-      setAccessToken(data.access_token);
+      dispatch(setAccessToken(data.access_token));
     }
   }, [data]);
   useEffect(() => {

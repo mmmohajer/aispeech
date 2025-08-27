@@ -6,9 +6,9 @@ from google.cloud import texttospeech
 from ai.utils.open_ai_manager import OpenAIManager
 from ai.utils.google_ai_manager import GoogleAIManager
 from ai.utils.audio_manager import AudioManager
-from websocket.consumers.base import BaseConsumer
+from websocket.consumers.base import BasePrivateConsumer
 
-class ChatBotConsumer(BaseConsumer):
+class ChatBotConsumer(BasePrivateConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.openai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)

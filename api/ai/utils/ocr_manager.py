@@ -10,9 +10,10 @@ from weasyprint import HTML
 
 from ai.utils.doc_ai_managr import DocAIManager
 from ai.utils.chunk_manager import ChunkPipeline
+from ai.tasks import apply_cost_task
 
 class OCRManager:
-    def __init__(self, google_cloud_project_id, google_cloud_location, google_cloud_processor_id):
+    def __init__(self, google_cloud_project_id, google_cloud_location, google_cloud_processor_id, cur_profile=None):
         """
         Initializes the OCRManager instance with Google Cloud configuration.
 
@@ -28,6 +29,12 @@ class OCRManager:
         self.GOOGLE_CLOUD_LOCATION = google_cloud_location
         self.GOOGLE_CLOUD_PROCESSOR_ID = google_cloud_processor_id
         self.cost = 0
+        self.cur_profile = cur_profile
+    
+    def _apply_cost(self, cost):
+        self.cost += cost
+        if self.cur_profile:
+            apply_cost_task.delay(self.cur_profile.id, cost)
 
     def _png_bytes_to_pdf_bytes(self, png_bytes):
         """
@@ -232,19 +239,47 @@ class OCRManager:
                 html_outputs.append(html_output)
             except Exception as e:
                 print(f"Error in Document AI OCR: {e}")
-                self.cost = 0
                 return None
-            self.cost = num_pages * cost_per_page
+            self._apply_cost(num_pages * cost_per_page)
             return "\n".join(html_outputs)
         except Exception as e:
             print(f"Error in Document AI OCR: {e}")
-            self.cost = 0
             return None
     
-    def read_pdf_bytes(self, pdf_bytes, progress_callback=None):
+    def read_pdf_bytes(self, pdf_bytes, progress_callback=None, start_page=None, end_page=None):
+        """
+        Extracts and OCRs pages from a PDF file, returning HTML and plain text.
+
+        Args:
+            pdf_bytes (bytes): PDF file data.
+            progress_callback (callable, optional): Function called after each page is processed. Signature: (page, total).
+            start_page (int, optional): First page to process (1-based). If None, starts from first page.
+            end_page (int, optional): Last page to process (1-based, inclusive). If None, ends at last page.
+
+        Behavior:
+            - Determines the total number of pages in the PDF.
+            - Processes only the pages in the range [start_page, end_page].
+            - For each page:
+                - Converts the page to PNG bytes.
+                - Runs OCR using Document AI and collects HTML output.
+                - Calls progress_callback (if provided) after each page.
+            - Concatenates all HTML outputs.
+            - Extracts plain text from the combined HTML using ChunkPipeline.
+
+        Returns:
+            tuple:
+                html_src (str): Concatenated HTML output for all processed pages.
+                simple_text (str): Extracted plain text from the HTML.
+        """
         number_of_pages = self.get_pdf_page_count(pdf_bytes)
+        start = start_page if start_page is not None else 1
+        end = end_page if end_page is not None else number_of_pages
+        if start < 1:
+            start = 1
+        if end > number_of_pages:
+            end = number_of_pages
         pdf_texts = []
-        for page in range(1, number_of_pages + 1):
+        for page in range(start, end + 1):
             msg = f"Processing page {page}/{number_of_pages}..."
             if progress_callback:
                 progress_callback(page=page, total=number_of_pages)

@@ -13,6 +13,9 @@ import {
   faEyeSlash,
   faUpload,
   faCirclePlay,
+  faMicrophone,
+  faStopCircle,
+  faPaperPlane,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   faSquareInstagram,
@@ -189,6 +192,33 @@ const Icon = ({
       {type === "circle-play" ? (
         <FontAwesomeIcon
           icon={faCirclePlay}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "microphone" ? (
+        <FontAwesomeIcon
+          icon={faMicrophone}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "stop-circle" ? (
+        <FontAwesomeIcon
+          icon={faStopCircle}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "paper-plane" ? (
+        <FontAwesomeIcon
+          icon={faPaperPlane}
           style={{ color, width, height, transform: `scale(${scale})` }}
         />
       ) : (

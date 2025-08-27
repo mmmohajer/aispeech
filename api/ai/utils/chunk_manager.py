@@ -13,7 +13,7 @@ class HTMLChunker:
         self.BLOCK_BREAK_TAGS = {
             "p", "div", "br", "li", "ul", "ol",
             "h1", "h2", "h3", "h4", "h5", "h6",
-            "table", "tr", "th", "td",
+            "table", "tr", "th", "td", "thead", "tbody", "tfoot", "pre", "code"
         }
         self._SENT_END_CHARS = ".!?;؟؛…。！？；．।॥։።፧"
         self._CLOSERS = "’”\"'»›）)]】》〗〙〛〉］｝』」"

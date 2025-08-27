@@ -5,4 +5,5 @@ from . import consumers
 URL_PATHS = [
     path("wss/test-socket/", consumers.TestSocketConsumer),
     path("wss/chat-bot/", consumers.ChatBotConsumer),
+    path("wss/teacher/", consumers.TeacherConsumer),
 ]

@@ -1,4 +1,4 @@
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -21,6 +21,7 @@ const useApiCalls = ({
   showErrerMessage = true,
 }) => {
   const dispatch = useDispatch();
+  const accessToken = useSelector((state) => state.accessToken);
 
   const [data, setData] = useState();
   const [status, setStatus] = useState();
@@ -29,7 +30,6 @@ const useApiCalls = ({
     try {
       let curUrl;
       let res;
-      const accessToken = getLocalStorage("access_token");
       if (useDefaultHeaders && accessToken) {
         if (!headers) {
           headers = { Authorization: `${JWT_PRE_WORD} ${accessToken}` };

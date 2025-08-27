@@ -13,3 +13,4 @@ export const PROFILE_API_ROUTE = "/api/profile/";
 // WEBSOCKET API ROUTES
 export const WEBSOCKET_TEST_API_ROUTE = `/wss/test-socket/`;
 export const CHAT_BOT_API_ROUTE = `/wss/chat-bot/`;
+export const TEACHER_API_ROUTE = `/wss/teacher/`;

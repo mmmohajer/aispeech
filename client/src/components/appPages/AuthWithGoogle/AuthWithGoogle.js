@@ -14,12 +14,13 @@ import {
 } from "@/constants/apiRoutes";
 import { PAGE_ROUTES } from "@/constants/pageRoutes";
 import { setLocalStorage } from "@/utils/storage";
+import { setAccessToken } from "@/reducer/subs/accessToken";
 
 const AuthWithGoogle = ({ code }) => {
   const dispatch = useDispatch();
   const router = useRouter();
 
-  const [accessToken, setAccessToken] = useState("");
+  const [googleAccessToken, setGoogleAccessToken] = useState("");
   const [idToken, setIdToken] = useState("");
 
   // ----------------------------------------------------------------
@@ -44,7 +45,7 @@ const AuthWithGoogle = ({ code }) => {
   }, [code]);
   useEffect(() => {
     if (data?.access_token && data?.id_token) {
-      setAccessToken(data.access_token);
+      setGoogleAccessToken(data.access_token);
       setIdToken(data.id_token);
     } else if (data?.error) {
       router.push(PAGE_ROUTES.LOGIN);
@@ -60,7 +61,7 @@ const AuthWithGoogle = ({ code }) => {
     method: "POST",
     url: USER_LOGIN_WITH_GOOGLE_API_ROUTE,
     bodyData: {
-      access_token: accessToken,
+      access_token: googleAccessToken,
       id_token: idToken,
     },
     sendReq: loginUser,
@@ -70,15 +71,16 @@ const AuthWithGoogle = ({ code }) => {
     },
   });
   useEffect(() => {
-    if (accessToken && idToken) {
+    if (googleAccessToken && idToken) {
       setLoginUser(true);
     }
-  }, [accessToken, idToken]);
+  }, [googleAccessToken, idToken]);
   useEffect(() => {
     if (loginData?.refresh_token) {
       setLocalStorage("refresh_token", loginData.refresh_token);
       if (data?.access_token) {
         setLocalStorage("access_token", loginData.access_token);
+        dispatch(setAccessToken(loginData.access_token));
       }
       if (loginData?.user && loginData?.user?.is_active) {
         router.push(PAGE_ROUTES.DASHBOARD);

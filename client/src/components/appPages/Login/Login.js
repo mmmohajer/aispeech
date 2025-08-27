@@ -16,6 +16,7 @@ import { PAGE_ROUTES } from "@/constants/pageRoutes";
 import useApiCalls from "@/hooks/useApiCalls";
 import { USER_LOGIN_API_ROUTE } from "@/constants/apiRoutes";
 import { setLocalStorage } from "@/utils/storage";
+import { setAccessToken } from "@/reducer/subs/accessToken";
 
 import { formValidated } from "./validator";
 
@@ -44,6 +45,7 @@ const Login = () => {
   useEffect(() => {
     if (data?.access_token) {
       setLocalStorage("access_token", data.access_token);
+      dispatch(setAccessToken(data.access_token));
       if (data?.refresh_token) {
         setLocalStorage("refresh_token", data.refresh_token);
       }

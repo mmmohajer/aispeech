@@ -449,5 +449,31 @@ def test_convert_audio_to_text():
     with open("/websocket_tmp/me/convert_audio_to_text_result.html", "w", encoding="utf-8") as f:
         f.write(result)
 
+def test_advanced_teaching_content():
+    pdf_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_path, 'rb') as file:
+        pdf_bytes = file.read()
+    ocr_manager = OCRManager(
+        google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
+        google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
+        google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID
+    )
+    pdf_file_path = os.path.join("/websocket_tmp/texts/", 'Relativity4.pdf')
+    with open(pdf_file_path, 'rb') as pdf_file:
+        pdf_bytes = pdf_file.read()
+    number_of_pages = ocr_manager.get_pdf_page_count(pdf_bytes)
+    number_of_pages = 1
+    pdf_texts = []
+    for page in range(1, number_of_pages + 1):
+        print(f"Processing page {page}...")
+        png_bytes = ocr_manager.convert_pdf_page_to_png_bytes(pdf_file_path, page_number=page)
+        html_output = ocr_manager.ocr_using_document_ai(base64.b64encode(png_bytes).decode('utf-8'))
+        pdf_texts.append(html_output)
+    html_to_translate = "".join(pdf_texts)
+    open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
+    q_a_list = open_ai_manager.build_advanced_teaching_content_for_a_text(html_to_translate, target_language="en", max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=1000, max_teaching_tokens=5000)
+    with open("/websocket_tmp/texts/advanced_teaching.json", "w", encoding="utf-8") as f:
+        json.dump(q_a_list, f, ensure_ascii=False, indent=2)
+
 def test_ai_manager():
-   test_convert_audio_to_text()
+   test_advanced_teaching_content()

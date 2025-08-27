@@ -2,18 +2,25 @@ import re
 import random
 
 from ai.utils.chunk_manager import ChunkPipeline
+from ai.tasks import apply_cost_task
 
 class BaseAIManager:
     """
     Base class for AI managers.
     ai_type (str): The type of AI being used (e.g., "open_ai"); options are "open_ai", "google".
     """
-    def __init__(self, ai_type="open_ai"):
+    def __init__(self, ai_type="open_ai", cur_profile=None):
         self.messages = []
         self.prompt = ""
         self.cost = 0
         self.ai_type = ai_type
+        self.cur_profile = cur_profile
 
+    def _apply_cost(self, cost):
+        self.cost += cost
+        if self.cur_profile:
+            apply_cost_task.delay(self.cur_profile.id, cost)
+    
     def _clean_code_block(self, response_text):
         pattern = r"^```(?:json|html)?\n?(.*)```$"
         match = re.match(pattern, response_text.strip(), re.DOTALL)
@@ -405,7 +412,7 @@ class BaseAIManager:
                 f"You are a professional documentation editor. Your task is to manipulate only the current chunk according to the style: {manipulation_type}.\n"
                 + (f"Rewrite the improved version in {target_language}.\n" if target_language else "")
                 + "You are given the general summary, manipulation summary, previous chunk, current chunk, next chunk, previous manipulated chunk, and a summary of all previous manipulated chunks for context.\n"
-                + "Include only allowed HTML tags: h1-h6, p, div, a, ul, li, img, video.\n"
+                + "Include only standard HTML tags.\n"
                 + "For images or videos, use a placeholder with a caption.\n"
                 + "When reviewing each chunk, use the context to improve writing, consistency, and interpretation.\n"
                 + "If you see a header, anchor, paragraph, list, or table, use the correct HTML tag.\n"
@@ -470,7 +477,6 @@ class BaseAIManager:
         general_summary = self.summarize(text, max_length=max_length_for_general_summary, max_chunk_size=max_chunk_size_for_general_summary)
         chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
         all_q_and_a = []
-        previous_q_and_a_summary = ""
         for i, chunk in enumerate(chunks):
             msg = f"Generating Q&A for chunk {i}/{len(chunks)}"
             if progress_callback:
@@ -675,3 +681,78 @@ class BaseAIManager:
                 teaching_content = {}
             all_teaching_content.append(teaching_content)
         return all_teaching_content
+    
+    def build_advanced_teaching_content_for_a_text(self, text, target_language=None, max_length_for_general_summary=2000, max_chunk_size_for_general_summary=15000, max_chunk_size=2500, max_teaching_tokens=5000, progress_callback=None):
+        """
+        Build advanced teaching content for a text. For each chunk, generate:
+        {
+            "text_for_speech": "Speech the AI teacher will make to explain concepts",
+            "text_to_write": "HTML output (like slides) to help user grasp the speech, with highlights, lists, headings, tables, etc.",
+            "questions_and_answers": [{"question": "...", "answer": "..."}, ...]
+        }
+        IMPORTANT: ALL OUTPUTS (text_to_speech, text_to_write, questions_and_answers) MUST BE IN THE TARGET LANGUAGE, EVEN IF THE ORIGINAL LANGUAGE OF THE INPUT IS DIFFERENT. THIS REQUIREMENT IS MANDATORY. IF target_language IS SET, OUTPUTS MUST BE IN THAT LANGUAGE. (REQUIREMENT: ALL OUTPUTS IN TARGET LANGUAGE)
+
+        Args:
+            text (str): The input text (book, article, etc.)
+            target_language (str or None): If set, write all outputs in this language (e.g., 'en', 'fr', 'fa'). If None, keep the original language.
+            max_length_for_general_summary (int): Max tokens for general summary. Default 2000.
+            max_chunk_size_for_general_summary (int): Max chunk size for general summary. Default 15000.
+            max_chunk_size (int): Max size of each chunk for teaching. Default 2500.
+            max_teaching_tokens (int): Max tokens for each teaching step. Default 5000.
+
+        Returns:
+            list: List of advanced teaching content dicts for all chunks.
+        """
+        general_summary = self.summarize(text, max_length=max_length_for_general_summary, max_chunk_size=max_chunk_size_for_general_summary)
+        chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
+        all_advanced_content = []
+        for i, chunk in enumerate(chunks):
+            msg = f"Generating advanced teaching content for chunk {i}/{len(chunks)}"
+            if progress_callback:
+                progress_callback(chunk=chunk, index=i, total=len(chunks))
+            else:
+                print(msg)
+            previous_chunk = chunks[i-1]["html"] if i > 0 else ""
+            cur_chunk = chunk["html"]
+            next_chunk = chunks[i+1]["html"] if i < len(chunks)-1 else ""
+            system_prompt = (
+                "You are an expert AI teacher. For the current chunk, deeply understand the content and generate advanced teaching material as follows:\n"
+                "1. text_to_speech: Write a strong, clear explanation for the AI teacher to speak, using SSML markup tags (such as <speak>, <break>, <emphasis>, etc.) to enhance text-to-speech output (e.g., pauses, emphasis, pitch, rate, etc.).\n"
+                "2. text_to_write: Write a concise HTML output (like PowerPoint slides) that highlights and organizes the most important points from the speech. Use headings, lists, tables, and formatting to help the user grasp the speech. Do not make it lengthy; focus on clarity and highlights.\n"
+                "3. questions_and_answers: Generate a list of Q&A pairs (question and answer) that, if answered correctly, prove the user has mastered the concept.\n"
+                + (f"ALL OUTPUTS (text_to_speech, text_to_write, questions_and_answers) MUST BE IN THE {target_language}, EVEN IF THE ORIGINAL LANGUAGE OF THE INPUT IS DIFFERENT. THIS REQUIREMENT IS MANDATORY.\n" if target_language else "")
+                + "Only generate teaching content for meaningful, teaching, or explanatory parts. If the chunk is not important (e.g., table of contents, filler, or lacks concepts), return an empty list.\n"
+                + "You are given the general summary, previous chunk, current chunk, next chunk, for context. These inputs are only helpers to give you better insight and help you analyze the current chunk more effectively.\n"
+                + "Output is ONLY for the current chunk. Output only the advanced teaching content JSON in the following format:\n"
+                + '{"text_to_speech": "...", "text_to_write": "...", "questions_and_answers": [{"question": "...", "answer": "..."}, ...]}'
+            )
+            user_content = (
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ]
+            prompt = (
+                f"{system_prompt}\n"
+                f"General summary: {general_summary}\n"
+                f"Previous chunk: {previous_chunk}\n"
+                f"Current chunk: {cur_chunk}\n"
+                f"Next chunk: {next_chunk}\n"
+            )
+            if self.ai_type == "open_ai":
+                response = self.generate_response(max_token=max_teaching_tokens, messages=messages)
+            elif self.ai_type == "google":
+                response = self.generate_response(max_token=max_teaching_tokens, prompt=prompt)
+            try:
+                advanced_content = eval(response) if isinstance(response, str) else response
+                if not isinstance(advanced_content, dict):
+                    advanced_content = {}
+            except Exception:
+                advanced_content = {}
+            all_advanced_content.append(advanced_content)
+        return all_advanced_content
+        

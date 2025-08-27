@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 
 import Div from "@/baseComponents/reusableComponents/Div";
 
 import useWebSocket from "@/hooks/useWebSocket";
-import { CHAT_BOT_API_ROUTE } from "@/constants/apiRoutes";
+import { CHAT_BOT_API_ROUTE, TEACHER_API_ROUTE } from "@/constants/apiRoutes";
 
-import { handleMessage } from "./utils";
-
-const ConnectionToSocket = ({ socketRefManager, children }) => {
+const ConnectionToSocket = ({ socketRefManager, setWsData, children }) => {
+  const accessToken = useSelector((state) => state.accessToken);
   // -------------------------------------------------
   // Chat Socket Request Handler Start
   // -------------------------------------------------
@@ -15,8 +15,11 @@ const ConnectionToSocket = ({ socketRefManager, children }) => {
   const { socketRef, send } = useWebSocket({
     sendReq,
     setSendReq,
-    url: `${CHAT_BOT_API_ROUTE}`,
-    onMessage: (event) => handleMessage(event),
+    url: `${TEACHER_API_ROUTE}?token=${accessToken}`,
+    onMessage: (event) => {
+      const data = JSON.parse(event.data);
+      setWsData((prev) => ({ ...prev, ...data }));
+    },
   });
   useEffect(() => {
     setSendReq(true);

@@ -10,6 +10,7 @@ import alert from "./subs/alert";
 import profile from "./subs/profile";
 import sideBarDashboardIsActive from "./subs/sideBarDashboardIsActive";
 import scrollPos from "./subs/scrollPos";
+import accessToken from "./subs/accessToken";
 
 const reducer = combineReducers({
   activeMenu,
@@ -22,6 +23,7 @@ const reducer = combineReducers({
   profile,
   sideBarDashboardIsActive,
   scrollPos,
+  accessToken,
 });
 
 export default reducer;

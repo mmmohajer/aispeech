@@ -15,6 +15,7 @@ class Profile(TimeStampedUUIDModel):
     mailing_street_address = models.CharField(null=True, blank=True, max_length=255)
     mailing_postal_code_zip = models.CharField(null=True, blank=True, max_length=20)
     profile_photo = models.CharField(null=True, blank=True, max_length=2048)
+    credit = models.FloatField(default=0.0)
 
     def __str__(self):
         return self.user.email

@@ -9,6 +9,7 @@ import useApiCalls from "@/hooks/useApiCalls";
 import { USER_LOGOUT_API_ROUTE } from "@/constants/apiRoutes";
 import { PAGE_ROUTES } from "@/constants/pageRoutes";
 import { setProfile } from "@/reducer/subs/profile";
+import { clearAccessToken } from "@/reducer/subs/accessToken";
 
 const LogOut = ({ children, ...props }) => {
   const dispatch = useDispatch();
@@ -38,6 +39,7 @@ const LogOut = ({ children, ...props }) => {
     showErrerMessage: false,
     handleError: () => {
       removeLocalStorage("access_token");
+      dispatch(clearAccessToken());
       removeLocalStorage("refresh_token");
       dispatch(setProfile({}));
       router.push(PAGE_ROUTES.LOGIN);
@@ -46,6 +48,7 @@ const LogOut = ({ children, ...props }) => {
   useEffect(() => {
     if (data?.success) {
       removeLocalStorage("access_token");
+      dispatch(clearAccessToken());
       removeLocalStorage("refresh_token");
       dispatch(setProfile({}));
       router.push(PAGE_ROUTES.LOGIN);

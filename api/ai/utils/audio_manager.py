@@ -185,15 +185,7 @@ class AudioManager:
         if max_duration:
             wav_data = self.limit_wav_duration(wav_data, max_duration)
         filtered_wav = self.skip_seconds_wav(wav_data, duration_in_second_to_skip)
-
-        uid = uuid.uuid4()
-        with open(f"/websocket_tmp/debug/processed_{uid}.wav", "wb") as f:
-            f.write(filtered_wav)
         open_ai_text = self.open_ai_manager.stt(filtered_wav, input_type='bytes')
-        with open(f"/websocket_tmp/debug/processed.html", "ab") as f:
-            block = f"\n--- UID: {uid} ---\n".encode("utf-8") + (open_ai_text.encode("utf-8") if isinstance(open_ai_text, str) else open_ai_text) + b"\n"
-            f.write(block)
-
         stt_chunks = self.open_ai_manager.build_chunks(text=open_ai_text, max_chunk_size=1000)
         self.open_ai_manager.add_message("system", text=(
             "You are a helpful assistant that improves speech-to-text (STT) chunks. "
@@ -300,6 +292,7 @@ class AudioManager:
             progress_callback (callable, optional): Function to call with progress updates for each chunk.
             input_format (str, optional): Explicit format ('webm', 'mp3', 'wav', 'm4a'). If None, tries to auto-detect.
             chunk_progress_callback (callable, optional): Function to call with progress updates for each chunk during processing.
+            do_final_edition (bool): Whether to perform a final text improvement after all chunks are processed (default: False).
 
         Returns:
             str: The improved speech text reconstructed from all chunks.

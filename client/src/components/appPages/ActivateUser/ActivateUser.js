@@ -11,6 +11,7 @@ import useApiCalls from "@/hooks/useApiCalls";
 import { USER_ACTIVATE_ACCOUNT_API_ROUTE } from "@/constants/apiRoutes";
 import { PAGE_ROUTES } from "@/constants/pageRoutes";
 import { setLocalStorage } from "@/utils/storage";
+import { setAccessToken } from "@/reducer/subs/accessToken";
 
 const ActivateUser = ({ token, redirectUrl }) => {
   const dispatch = useDispatch();
@@ -40,6 +41,7 @@ const ActivateUser = ({ token, redirectUrl }) => {
       setLocalStorage("refresh_token", data.refresh_token);
       if (data?.access_token) {
         setLocalStorage("access_token", data.access_token);
+        dispatch(setAccessToken(data.access_token));
       }
       if (data?.user && data?.user?.is_active) {
         let localRedirectUrl = redirectUrl || PAGE_ROUTES.DASHBOARD;
