@@ -21,7 +21,7 @@ class BaseConsumer(AsyncWebsocketConsumer):
         return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
     
     async def _handle_error(self, message):
-        return await self._send_json({"error": message})
+        return await self._send_json({"error": message, "remove_loader": True})
     
     async def connect(self):
         await self.accept()

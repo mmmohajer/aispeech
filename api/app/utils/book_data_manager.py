@@ -1,6 +1,6 @@
 from django.conf import settings
 
-from core.models import ProfileModel
+from core.models import ProfileModel, UserModel
 from ai.utils.ocr_manager import OCRManager
 from ai.utils.open_ai_manager import OpenAIManager
 from app.models import BookForUserModel, BookChunkModel, BookTeachingContentModel
@@ -12,14 +12,13 @@ class BookDataManager:
         self.user_to_learn = user_to_learn
         self.book_title = book_title
         self.target_language = target_language
-        self.cur_profile = ProfileModel.objects.filter(user=self.user_to_learn).first()
         self.ocr_manager = OCRManager(
             google_cloud_project_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROJECT_ID,
             google_cloud_location=settings.GOOGLE_CLOUD_DOCUMENT_AI_LOCATION,
             google_cloud_processor_id=settings.GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID,
-            cur_profile=self.cur_profile
+            cur_user=self.self.user_to_learn
         )
-        self.open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY, cur_profile=self.cur_profile)
+        self.open_ai_manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY, cur_user=self.user_to_learn)
         self.start_page = start_page
         self.end_page = end_page
 

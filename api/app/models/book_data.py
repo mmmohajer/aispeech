@@ -53,7 +53,9 @@ SENDER_OPTIONS = (
 
 class BookChatMessage(TimeStampedModel):
     book_for_user = models.ForeignKey(BookForUser, on_delete=models.CASCADE, related_name='chat_messages')
-    message = models.TextField()
+    speech_message = models.TextField(blank=True, null=True)
+    slide_message = models.TextField(blank=True, null=True)
+    simple_message = models.TextField(blank=True, null=True)
     message_embedding = VectorField(dimensions=3072)
     sender = models.CharField(max_length=10, choices=SENDER_OPTIONS)
 

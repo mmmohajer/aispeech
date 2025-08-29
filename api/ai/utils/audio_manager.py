@@ -1,3 +1,4 @@
+from unittest import result
 from django.conf import settings
 import wave
 import io
@@ -16,7 +17,7 @@ class AudioManager:
 
     def preprocess_wav(self, wav_bytes):
         """DOC
-        Applies basic preprocessing (noise reduction, bandpass filtering) to WAV audio bytes using ffmpeg.
+        Applies basic preprocessing (noise reduction, bandpass filtering, volume normalization) to WAV audio bytes using ffmpeg.
 
         Args:
             wav_bytes (bytes): The input audio data in WAV format.
@@ -28,8 +29,8 @@ class AudioManager:
             tempfile.NamedTemporaryFile(suffix=".wav") as out_file:
             in_file.write(wav_bytes)
             in_file.flush()
-            # Enhanced filter chain: noise reduction, bandpass, amplitude normalization, silence removal
-            filter_chain = "afftdn,highpass=f=300,lowpass=f=3400,dynaudnorm,silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-50dB"
+            # Enhanced filter chain: noise reduction, bandpass, amplitude normalization, volume boost, silence removal
+            filter_chain = "afftdn,highpass=f=300,lowpass=f=3400,dynaudnorm,volume=3dB,silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-50dB"
             cmd = [
                 "ffmpeg", "-y", "-i", in_file.name,
                 "-af", filter_chain,
@@ -169,7 +170,7 @@ class AudioManager:
             out_wf.writeframes(frames)
         return out_buffer.getvalue()
     
-    def advanced_stt(self, audio_bytes, duration_in_second_to_skip=0, max_duration=None, progress_callback=None):
+    def advanced_stt(self, audio_bytes, duration_in_second_to_skip=0, max_duration=None, progress_callback=None, target_language=None):
         """
         Processes audio input (WebM/Opus bytes), applies preprocessing, runs STT, chunks the text, and improves each chunk using OpenAI. Optionally reports progress via callback.
 
@@ -185,28 +186,21 @@ class AudioManager:
         if max_duration:
             wav_data = self.limit_wav_duration(wav_data, max_duration)
         filtered_wav = self.skip_seconds_wav(wav_data, duration_in_second_to_skip)
-        open_ai_text = self.open_ai_manager.stt(filtered_wav, input_type='bytes')
+        open_ai_text = self.open_ai_manager.stt(filtered_wav, input_type='bytes', language=target_language)
         stt_chunks = self.open_ai_manager.build_chunks(text=open_ai_text, max_chunk_size=1000)
         self.open_ai_manager.add_message("system", text=(
-            "You are a helpful assistant that improves speech-to-text (STT) chunks. "
-            "You are given a chunk that has been processed from STT, so it might have some issues. "
-            "Your job is to improve the chunk and make it as close as possible to the original spoken text, correcting any errors or awkward phrasing. "
-            "Try to preserve the original tone of the speech: if it is conversational, do not make it formal, and vice versa. "
-            "However, make sure the response is correct in terms of structure and meaning, even if the STT output contains awkward words—improve them to clearly convey the intended meaning. "
-            "You are provided with: previous_chunk, cur_chunk, next_chunk, and a summary of the chunk. Your duty is to improve only the cur_chunk, but you may use the context from previous and next chunks and the summary to help you. "
-            "Highlight: Only output the improved text for the current chunk. The other inputs are just helpers to better comprehend the context and fix any spelling or STT conversion issues. Do not include or reference them in your output."
+            "You are a text fixer for speech-to-text (STT) outputs of the user. "
+            "cur_chunk is the USER MESSAGE and may contain transcription errors, misheard words, or awkward phrasing. "
+            "TASK: CORRECT ONLY cur_chunk (USER MESSAGE) IF NEEDED TO MAKE IT CLEARER, GRAMMATICALLY FIXED, and NATURAL, "
+            "while strictly preserving the original meaning, style, and approximate length of cur_chunk. "
+            "Do NOT add new sentences, explanations, or unrelated details to cur_chunk. "
+            "If the input of cur_chunk is already correct, return the original text EXACTLY as received, without any change, copy, or reformulation."
         ))
-        summary = self.open_ai_manager.summarize(open_ai_text, max_length=1000, max_chunk_size=1000)
         processed_text = ""
         total_chunks = len(stt_chunks)
         for i, chunk in enumerate(stt_chunks):
-            previous_chunk = stt_chunks[i-1]["text"] if i > 0 else ""
             cur_chunk = chunk["text"]
-            next_chunk = stt_chunks[i+1]["text"] if i < total_chunks-1 else ""
-            self.open_ai_manager.add_message("system", text=f"previous_chunk: {previous_chunk}")
-            self.open_ai_manager.add_message("system", text=f"cur_chunk: {cur_chunk}")
-            self.open_ai_manager.add_message("system", text=f"next_chunk: {next_chunk}")
-            self.open_ai_manager.add_message("system", text=f"summary: {summary}")
+            self.open_ai_manager.add_message("user", text=f"cur_chunk: {cur_chunk}")
             improved_chunk = self.open_ai_manager.generate_response()
             processed_text += improved_chunk + " "
             if progress_callback:
@@ -281,7 +275,7 @@ class AudioManager:
                 wav_file.seek(0)
                 return wav_file.read()
     
-    def convert_audio_to_text(self, audio_bytes, chunk_duration_sec=60, do_final_edition=False, progress_callback=None, input_format=None, chunk_progress_callback=None):
+    def convert_audio_to_text(self, audio_bytes, chunk_duration_sec=60, do_final_edition=False, progress_callback=None, input_format=None, chunk_progress_callback=None, target_language=None):
         """
         Converts audio to text using advanced STT, processing the audio in manageable chunks (default: 1 minute).
         Supports input formats: WebM/Opus, MP3, WAV, M4A. Each chunk is processed sequentially, skipping already processed duration, until the whole audio is transcribed and improved.
@@ -304,12 +298,12 @@ class AudioManager:
         num_chunks = int(total_duration // chunk_duration_sec) + (1 if total_duration % chunk_duration_sec > 0 else 0)
         for chunk_idx in range(num_chunks):
             self.open_ai_manager.clear_messages()   
-            chunk_text = self.advanced_stt(processed_wav, duration_in_second_to_skip=chunk_idx * chunk_duration_sec, max_duration=chunk_duration_sec * (chunk_idx + 1), progress_callback=chunk_progress_callback)
+            chunk_text = self.advanced_stt(processed_wav, duration_in_second_to_skip=chunk_idx * chunk_duration_sec, max_duration=chunk_duration_sec * (chunk_idx + 1), progress_callback=chunk_progress_callback, target_language=target_language)
             if progress_callback:
                 progress_callback(chunk_idx, num_chunks, chunk_text)
             processed_text += chunk_text + " "
         self.open_ai_manager.clear_messages()
         finalized_text = processed_text.strip()
         if do_final_edition:
-            finalized_text = self.open_ai_manager.manipulate_text(text=finalized_text, manipulation_type='improve_awkward_words_or_phrases_for_better_meaning_while_do_your_best_to_preserve_original_text')
+            finalized_text = self.open_ai_manager.manipulate_text(text=finalized_text, manipulation_type='improve_awkward_words_or_phrases_for_better_meaning_while_do_your_best_to_preserve_original_text', target_language=target_language)
         return finalized_text

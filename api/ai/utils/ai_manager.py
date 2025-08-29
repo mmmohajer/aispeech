@@ -9,17 +9,17 @@ class BaseAIManager:
     Base class for AI managers.
     ai_type (str): The type of AI being used (e.g., "open_ai"); options are "open_ai", "google".
     """
-    def __init__(self, ai_type="open_ai", cur_profile=None):
+    def __init__(self, ai_type="open_ai", cur_user=None):
         self.messages = []
         self.prompt = ""
         self.cost = 0
         self.ai_type = ai_type
-        self.cur_profile = cur_profile
+        self.cur_user = cur_user
 
     def _apply_cost(self, cost):
         self.cost += cost
-        if self.cur_profile:
-            apply_cost_task.delay(self.cur_profile.id, cost)
+        if self.cur_user:
+            apply_cost_task.delay(self.cur_user.id, cost)
     
     def _clean_code_block(self, response_text):
         pattern = r"^```(?:json|html)?\n?(.*)```$"
@@ -151,6 +151,8 @@ class BaseAIManager:
         Example:
             summary = manager.summarize(long_text)
         """
+        if len(text) <= max_length:
+            return text
         chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
         summary = ""
         i = 0
@@ -194,6 +196,8 @@ class BaseAIManager:
         Example:
             summary = manager.summarize_for_translation(long_text)
         """
+        if len(text) <= max_length:
+            return text
         chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
         summary = ""
         i = 0
@@ -252,6 +256,8 @@ class BaseAIManager:
         Example:
             summary = manager.summarize_for_manipulation(long_text, manipulation_type='academic')
         """
+        if len(text) <= max_length:
+            return text
         chunks = self.build_chunks(text, max_chunk_size=max_chunk_size)
         summary = ""
         i = 0
@@ -416,7 +422,8 @@ class BaseAIManager:
                 + "For images or videos, use a placeholder with a caption.\n"
                 + "When reviewing each chunk, use the context to improve writing, consistency, and interpretation.\n"
                 + "If you see a header, anchor, paragraph, list, or table, use the correct HTML tag.\n"
-                + "Output only the manipulated chunk in HTML format."
+                + "IMPORTANT: Keep the structure of sentences as is. If the original chunk contains questions, lists, or other formats, preserve those formats in the manipulated output. Do not change questions to statements, or lists to paragraphs, etc.\n"
+                + "Output onlsy the manipulated chunk in HTML format."
             )
             user_content = (
                 f"General summary: {general_summary}\n"

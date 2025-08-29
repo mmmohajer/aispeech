@@ -75,7 +75,6 @@ const BaseAppWrapper = ({ isAuthPage = false, children }) => {
     if (refreshTokenRef?.current) {
       setRefreshUserAccessToken(true);
       const interval = setInterval(() => {
-        console.log("Refreshing user access token...");
         setRefreshUserAccessToken(true);
       }, 5 * 60 * 1000);
       return () => clearInterval(interval);

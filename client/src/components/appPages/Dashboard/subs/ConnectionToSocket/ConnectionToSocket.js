@@ -6,7 +6,12 @@ import Div from "@/baseComponents/reusableComponents/Div";
 import useWebSocket from "@/hooks/useWebSocket";
 import { CHAT_BOT_API_ROUTE, TEACHER_API_ROUTE } from "@/constants/apiRoutes";
 
-const ConnectionToSocket = ({ socketRefManager, setWsData, children }) => {
+const ConnectionToSocket = ({
+  socketRefManager,
+  setWsData,
+  classStarted,
+  children,
+}) => {
   const accessToken = useSelector((state) => state.accessToken);
   // -------------------------------------------------
   // Chat Socket Request Handler Start
@@ -22,8 +27,10 @@ const ConnectionToSocket = ({ socketRefManager, setWsData, children }) => {
     },
   });
   useEffect(() => {
-    setSendReq(true);
-  }, []);
+    if (classStarted) {
+      setSendReq(true);
+    }
+  }, [classStarted]);
   useEffect(() => {
     if (socketRef && send) {
       socketRefManager.current = { ref: socketRef, send: send };

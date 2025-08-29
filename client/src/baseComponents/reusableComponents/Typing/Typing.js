@@ -3,15 +3,16 @@ import { useState, useEffect } from "react";
 import Div from "@/baseComponents/reusableComponents/Div";
 import DivConvertTextToHtml from "@/baseComponents/reusableComponents/DivConvertTextToHtml";
 
-const Typing = ({ htmlContent, speed = 20 }) => {
+const Typing = ({ htmlContent, speed = 20, callBackFunction = null }) => {
   const [displayed, setDisplayed] = useState("");
 
   useEffect(() => {
     let i = 0;
     const interval = setInterval(() => {
-      setDisplayed(htmlContent.slice(0, i));
+      setDisplayed(htmlContent?.slice(0, i));
+      if (callBackFunction) callBackFunction();
       i++;
-      if (i > htmlContent.length) clearInterval(interval);
+      if (i > htmlContent?.length) clearInterval(interval);
     }, speed);
     return () => clearInterval(interval);
   }, [htmlContent, speed]);

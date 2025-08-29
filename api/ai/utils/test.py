@@ -446,7 +446,7 @@ def test_convert_audio_to_text():
     def chunk_progress_callback(chunk_index, total_chunks, chunk_text):
         print(f"Chunk Progress: {chunk_index + 1}/{total_chunks}")
     result = audio_manager.convert_audio_to_text(audio_bytes, chunk_duration_sec=30, do_final_edition=True, progress_callback=progress_callback, input_format='m4a', chunk_progress_callback=chunk_progress_callback)
-    with open("/websocket_tmp/me/convert_audio_to_text_result.html", "w", encoding="utf-8") as f:
+    with open("/websocket_tmp/me/convert_audio_to_text_result_now.html", "w", encoding="utf-8") as f:
         f.write(result)
 
 def test_advanced_teaching_content():
@@ -476,4 +476,4 @@ def test_advanced_teaching_content():
         json.dump(q_a_list, f, ensure_ascii=False, indent=2)
 
 def test_ai_manager():
-   test_advanced_teaching_content()
+   test_convert_audio_to_text()

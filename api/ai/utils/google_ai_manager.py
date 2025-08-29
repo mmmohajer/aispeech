@@ -1,14 +1,20 @@
 from google.cloud import speech, texttospeech, vision
 from google.generativeai import GenerativeModel, configure
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 import tiktoken
 from mutagen.mp3 import MP3
 from mutagen.flac import FLAC
+import requests
+import base64
+import copy
+
 
 from ai.utils.ai_manager import BaseAIManager
 from ai.utils.audio_manager import AudioManager
 
 class GoogleAIManager(BaseAIManager):
-    def __init__(self, api_key=None, cur_profile=None):
+    def __init__(self, api_key=None, cur_user=None):
         """
         Initialize the GoogleAIManager.
 
@@ -19,7 +25,7 @@ class GoogleAIManager(BaseAIManager):
         Returns:
             None
         """
-        super().__init__(ai_type="google", cur_profile=cur_profile)
+        super().__init__(ai_type="google", cur_user=cur_user)
         if api_key:
             configure(api_key=api_key)
         self.speech_client = speech.SpeechClient()
@@ -133,14 +139,13 @@ class GoogleAIManager(BaseAIManager):
         self.clear_messages()
         return response.text
     
-    def stt(self, audio_bytes, language_code='en-US', sample_rate_hertz=16000, encoding=None, file_path=None):
+    def stt(self, audio_bytes, language_code='en-US', encoding=None, file_path=None):
         """
         Perform speech-to-text using Google Cloud Speech-to-Text API.
 
         Args:
             audio_bytes (bytes): The input audio data.
             language_code (str): Language code of the audio. Default is 'en-US'.
-            sample_rate_hertz (int): Sample rate in Hz. Default is 16000.
             encoding: The audio encoding format (e.g., LINEAR16, MP3, FLAC).
             file_path (str): Optional path to the audio file (for duration calculation).
 
@@ -154,7 +159,6 @@ class GoogleAIManager(BaseAIManager):
         audio = speech.RecognitionAudio(content=audio_bytes)
         config = speech.RecognitionConfig(
             encoding=encoding,
-            sample_rate_hertz=sample_rate_hertz,
             language_code=language_code,
             enable_automatic_punctuation=True
         )
@@ -184,10 +188,21 @@ class GoogleAIManager(BaseAIManager):
         price_per_minute = self.GOOGLE_AI_PRICING["speech-to-text"]["audio_stt_per_1_minute"]
         cost = duration_minutes * price_per_minute
         self._apply_cost(cost)
-        texts = []
+        results = []
         for result in response.results:
-            texts.append(result.alternatives[0].transcript)
-        return " ".join(texts)
+            alt = result.alternatives[0]
+            words = []
+            for word_info in alt.words:
+                words.append({
+                    "word": word_info.word,
+                    "start_time": word_info.start_time.total_seconds(),
+                    "end_time": word_info.end_time.total_seconds()
+                })
+            results.append({
+                "transcript": alt.transcript,
+                "words": words
+            })
+        return results
 
     def tts(self, text, voice_name="en-US-Wavenet-D", audio_encoding=texttospeech.AudioEncoding.MP3, language_code="en-US"):
         """
@@ -217,7 +232,7 @@ class GoogleAIManager(BaseAIManager):
         response = client.synthesize_speech(
             input=input_text,
             voice=voice,
-            audio_config=audio_config
+            audio_config=audio_config,
         )
 
         char_count = len(text)
@@ -228,6 +243,66 @@ class GoogleAIManager(BaseAIManager):
         cost = (char_count / 1000) * price_per_1k
         self._apply_cost(cost)
         return response.audio_content
+    
+    def advanced_tts(
+        self,
+        text,
+        voice_name="en-US-Wavenet-D",
+        audio_encoding="LINEAR16",     # keep LINEAR16 so your duration math works
+        language_code="en-US",
+        sample_rate_hz=16000,
+        cred_path="/run/secrets/cred.json",
+    ):
+        """REST TTS with SSML <mark> timepoints (v1beta1)."""
+        # --- Auth
+        creds = service_account.Credentials.from_service_account_file(
+            cred_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        creds.refresh(Request())
+        token = creds.token
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        # --- SSML hygiene
+        ssml = text if (isinstance(text, str) and text.strip().startswith("<speak>")) else f"<speak>{text}</speak>"
+
+        # --- Base body (timepointing is TOP-LEVEL in REST)
+        body = {
+            "input": {"ssml": ssml},
+            "voice": {"languageCode": language_code, "name": voice_name},
+            "audioConfig": {"audioEncoding": audio_encoding, "sampleRateHertz": sample_rate_hz},
+            "enableTimePointing": ["SSML_MARK"],
+        }
+
+        def _post(endpoint, payload, label):
+            resp = requests.post(endpoint, headers=headers, json=payload)
+            if not resp.ok:
+                # log full body to see *why* it failed
+                print(f"TTS error ({label}): {resp.status_code} {resp.text}")
+                resp.raise_for_status()
+            return resp.json()
+
+        # 1) v1beta1 + requested voice + marks
+        try:
+            data = _post("https://texttospeech.googleapis.com/v1beta1/text:synthesize", body, "v1beta1+marks+voice")
+        except requests.HTTPError:
+            # 2) v1beta1 + STANDARD voice + marks
+            try:
+                b2 = copy.deepcopy(body)
+                b2["voice"]["name"] = "en-US-Standard-C"
+                data = _post("https://texttospeech.googleapis.com/v1beta1/text:synthesize", b2, "v1beta1+marks+standard")
+            except requests.HTTPError:
+                # 3) v1 without marks (last resort to still get audio)
+                b3 = copy.deepcopy(body)
+                b3.pop("enableTimePointing", None)
+                data = _post("https://texttospeech.googleapis.com/v1/text:synthesize", b3, "v1+no-marks")
+
+        audio_b64 = data.get("audioContent", "")
+        timepoints = data.get("timepoints", [])
+        return {
+            "audio_content": base64.b64decode(audio_b64) if audio_b64 else b"",
+            "timepoints": timepoints,
+        }
+
     
     def generate_image_description(self, image_bytes):
         """

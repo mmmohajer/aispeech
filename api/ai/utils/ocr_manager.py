@@ -13,7 +13,7 @@ from ai.utils.chunk_manager import ChunkPipeline
 from ai.tasks import apply_cost_task
 
 class OCRManager:
-    def __init__(self, google_cloud_project_id, google_cloud_location, google_cloud_processor_id, cur_profile=None):
+    def __init__(self, google_cloud_project_id, google_cloud_location, google_cloud_processor_id, cur_user=None):
         """
         Initializes the OCRManager instance with Google Cloud configuration.
 
@@ -29,12 +29,11 @@ class OCRManager:
         self.GOOGLE_CLOUD_LOCATION = google_cloud_location
         self.GOOGLE_CLOUD_PROCESSOR_ID = google_cloud_processor_id
         self.cost = 0
-        self.cur_profile = cur_profile
     
     def _apply_cost(self, cost):
         self.cost += cost
-        if self.cur_profile:
-            apply_cost_task.delay(self.cur_profile.id, cost)
+        if self.cur_user:
+            apply_cost_task.delay(self.cur_user.id, cost)
 
     def _png_bytes_to_pdf_bytes(self, png_bytes):
         """

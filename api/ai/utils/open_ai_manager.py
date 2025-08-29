@@ -8,7 +8,7 @@ from core.models import UserModel, ProfileModel
 from ai.utils.ai_manager import BaseAIManager
 
 class OpenAIManager(BaseAIManager):
-    def __init__(self, model, api_key, cur_profile=None):
+    def __init__(self, model, api_key, cur_user=None):
         """
         Initialize the OpenAIManager.
         
@@ -22,7 +22,7 @@ class OpenAIManager(BaseAIManager):
         Example:
             manager = OpenAIManager(model="gpt-4o", api_key="sk-...")
         """
-        super().__init__(ai_type="open_ai", cur_profile=cur_profile)
+        super().__init__(ai_type="open_ai", cur_user=cur_user)
         self.OPENAI_PRICING = {
             "gpt-3.5-turbo": {
                 "input_per_1k_token": 0.0005,
