@@ -16,6 +16,7 @@ const nextConfig = {
     APP_DOMAIN: "makeclient.ngrok.io",
     GA_TRACKING_ID: "",
     GOOGLE_AUTH_CLIENT_ID: "",
+    ICE_SERVER_DOMAIN: "IP_ADDRESS_OR_DOMAIN",
   },
 
   publicRuntimeConfig: {

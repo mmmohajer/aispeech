@@ -65,6 +65,9 @@ const App = ({ Component, pageProps }) => {
         ""
       )}
 
+      <Script src="/scriptjanus.js" strategy="beforeInteractive" />
+      <Script src="/adapter.js" strategy="beforeInteractive" />
+
       {/* -------------------------------- */}
       {/* Main App with Redux Provider */}
       {/* -------------------------------- */}

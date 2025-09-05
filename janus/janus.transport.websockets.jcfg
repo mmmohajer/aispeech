@@ -1,0 +1,6 @@
+general: {
+  ws = true              # enable plain WS
+  wss = false            # disable TLS (Nginx will terminate TLS instead)
+  ws_port = 8188         # matches what you exposed in docker-compose
+  ws_interface = "0.0.0.0"
+}

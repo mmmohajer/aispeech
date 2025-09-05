@@ -9,6 +9,8 @@ from ai.utils.open_ai_manager import OpenAIManager
 from ai.utils.google_ai_manager import GoogleAIManager
 from ai.utils.ocr_manager import OCRManager
 from ai.utils.audio_manager import AudioManager
+from ai.utils.aws_manager import AwsManager
+from ai.utils.azure_manager import AzureManager
 
 def test_get_response():
     manager = OpenAIManager(model="gpt-4o", api_key=settings.OPEN_AI_SECRET_KEY)
@@ -475,5 +477,88 @@ def test_advanced_teaching_content():
     with open("/websocket_tmp/texts/advanced_teaching.json", "w", encoding="utf-8") as f:
         json.dump(q_a_list, f, ensure_ascii=False, indent=2)
 
+def test_aws_tts():
+    aws_manager = AwsManager(
+        access_key_id=settings.AWS_ACCESS_KEY_ID,
+        secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_DEFAULT_REGION
+    )
+    text = """
+        <speak>
+        سلام! به سرویس <emphasis level="strong">پالی</emphasis> خوش آمدید.
+        </speak>
+    """
+    audio_bytes = aws_manager.tts(text=text, voice="Zeina", format="mp3", ssml=True)
+    print(f"Available voices: {aws_manager.list_voices(language_code="arb")}")
+    audio_file_path = os.path.join("/websocket_tmp/aws_tts", 'aws_tts_audio.mp3')
+    with open(audio_file_path, 'wb') as file:
+        file.write(audio_bytes)
+    print(f"Successfully Done")
+
+def test_azure_tts():
+    ssml_text = """
+    <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="fa-IR">
+    <voice name="fa-IR-DilaraNeural">
+        سلام! امروز می‌خواهیم درباره <emphasis level="strong">ری‌اکت</emphasis> صحبت کنیم.
+        <break time="700ms"/>
+        ری‌اکت یک کتابخانه جاوااسکریپت است که برای ساخت رابط‌های کاربری پویا استفاده می‌شود.
+        <break time="600ms"/>
+        یکی از مفاهیم مهم در ری‌اکت، <emphasis level="moderate">کامپوننت</emphasis> است. هر کامپوننت می‌تواند داده‌ها و رفتار مخصوص به خود را داشته باشد.
+        <break time="700ms"/>
+        حالا بیایید درباره یک هوک معروف در ری‌اکت صحبت کنیم: <emphasis level="strong">useEffect</emphasis>.
+        <break time="600ms"/>
+        هوک <emphasis level="strong">useEffect</emphasis> به شما اجازه می‌دهد تا کدهایی را اجرا کنید که وابسته به تغییرات داده‌ها یا وضعیت کامپوننت هستند.
+        <break time="700ms"/>
+        برای مثال، اگر بخواهید بعد از هر بار تغییر یک مقدار، داده‌ای را از سرور دریافت کنید، می‌توانید از <emphasis level="strong">useEffect</emphasis> استفاده کنید.
+        <break time="600ms"/>
+        این قابلیت باعث می‌شود برنامه‌های ری‌اکت شما پویا و واکنش‌گرا باشند.
+        <break time="700ms"/>
+        امیدوارم این توضیحات به شما کمک کند تا بهتر با ری‌اکت و هوک <emphasis level="strong">useEffect</emphasis> آشنا شوید.
+        <break time="600ms"/>
+        از توجه شما سپاسگزارم!
+    </voice>
+    </speak>
+    """
+    ssml_text = """
+        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+        <voice name="en-US-AriaNeural">
+            Hello! Today, we are going to talk about <emphasis level="strong">React</emphasis>.
+            <break time="700ms"/>
+            React is a JavaScript library used for building dynamic user interfaces.
+            <break time="600ms"/>
+            One of the key concepts in React is the <emphasis level="moderate">component</emphasis>. Each component can have its own data and behavior.
+            <break time="700ms"/>
+            Now, let's discuss a famous hook in React: <emphasis level="strong">useEffect</emphasis>.
+            <break time="600ms"/>
+            The <emphasis level="strong">useEffect</emphasis> hook allows you to run code that depends on changes in data or the state of a component.
+            <break time="700ms"/>
+            For example, if you want to fetch data from a server every time a value changes, you can use <emphasis level="strong">useEffect</emphasis>.
+            <break time="600ms"/>
+            This feature makes your React applications dynamic and responsive.
+            <break time="700ms"/>
+            I hope these explanations help you better understand React and the <emphasis level="strong">useEffect</emphasis> hook.
+            <break time="600ms"/>
+            Thank you for your attention!
+        </voice>
+        </speak>
+    """
+    azure_manager = AzureManager(
+        key=settings.AZURE_COGNITIVE_SERVICES_KEY_1,
+        region=settings.AZURE_COGNITIVE_SERVICES_REGION
+    )
+    print(azure_manager.list_voices())
+    audio_bytes = azure_manager.tts(
+        text=ssml_text,
+        # voice="fa-IR-FaridNeural",
+        voice="en-US-AriaNeural",
+        format="audio-16khz-32kbitrate-mono-mp3",
+        ssml=True
+    )
+    audio_file_path = os.path.join("/websocket_tmp/azure_tts", 'azure_tts_audio.mp3')
+    with open(audio_file_path, 'wb') as file:
+        file.write(audio_bytes)
+    print("✅ Saved Persian TTS as azure_fa.mp3")
+
+
 def test_ai_manager():
-   test_convert_audio_to_text()
+   list_voices()

@@ -54,10 +54,6 @@ const ChatBox = ({
 
       const timer = setTimeout(() => {
         const elapsedSec = ((performance.now() - roundStart) / 1000).toFixed(2);
-        console.log(
-          `Slide displayed at ${elapsedSec}s (expected: ${t}s):`,
-          slide
-        );
         setDisplayedSlides((prev) => [...prev, slide]);
         setGoBottomOfTheContainer(true);
       }, delayMs);
@@ -91,9 +87,6 @@ const ChatBox = ({
 
   useEffect(() => {
     if (chunks.length === 0) return;
-
-    const latestChunk = chunks[chunks.length - 1];
-    console.log("SENDING REQ (only once per chunk):", latestChunk);
 
     if (socketRefManager?.current?.send) {
       const combinedBlob = new Blob(chunks, { type: "audio/webm" });

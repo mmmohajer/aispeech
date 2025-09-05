@@ -18,3 +18,4 @@ export const STORAGE_BASE_URL =
   "https://techtipsbymoh.tor1.cdn.digitaloceanspaces.com";
 export const GA_TRACKING_ID = process.env.GA_TRACKING_ID;
 export const GOOGLE_AUTH_CLIENT_ID = process.env.GOOGLE_AUTH_CLIENT_ID;
+export const ICE_SERVER_DOMAIN = process.env.ICE_SERVER_DOMAIN;

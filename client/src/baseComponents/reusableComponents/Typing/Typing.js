@@ -7,12 +7,16 @@ const Typing = ({ htmlContent, speed = 20, callBackFunction = null }) => {
   const [displayed, setDisplayed] = useState("");
 
   useEffect(() => {
+    if (typeof htmlContent !== "string") {
+      setDisplayed("");
+      return;
+    }
     let i = 0;
     const interval = setInterval(() => {
-      setDisplayed(htmlContent?.slice(0, i));
+      setDisplayed(htmlContent.slice(0, i));
       if (callBackFunction) callBackFunction();
       i++;
-      if (i > htmlContent?.length) clearInterval(interval);
+      if (i > htmlContent.length) clearInterval(interval);
     }, speed);
     return () => clearInterval(interval);
   }, [htmlContent, speed]);

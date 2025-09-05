@@ -5,7 +5,7 @@ export const handleWsData = (
   setSpeech,
   setShowLoader
 ) => {
-  //   console.log("wsData", wsData);
+  console.log("wsData", wsData);
   if (wsData?.connection && !handleWsData.hasStartedClass) {
     socketRefManager.current.send({ task: "start_the_class" });
     handleWsData.hasStartedClass = true;

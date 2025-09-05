@@ -32,3 +32,5 @@ secrets/third_party_apis
 api.http
 
 secrets/secret_files
+
+janus/janus.jcfg

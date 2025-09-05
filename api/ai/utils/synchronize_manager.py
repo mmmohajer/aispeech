@@ -8,6 +8,7 @@ from xml.etree import ElementTree as ET
 from ai.utils.open_ai_manager import OpenAIManager
 from ai.utils.google_ai_manager import GoogleAIManager
 from ai.utils.audio_manager import AudioManager
+from ai.utils.azure_manager import AzureManager
 
 # class SynchronizeManager():
 #     def __init__(self, cur_user=None):
@@ -90,6 +91,10 @@ class SynchronizeManager():
             cur_user=cur_user
         )
         self.audio_manager = AudioManager()
+        self.azure_manager = AzureManager(
+            key=settings.AZURE_COGNITIVE_SERVICES_KEY_1,
+            region=settings.AZURE_COGNITIVE_SERVICES_REGION
+        )
     
     
 
@@ -169,7 +174,7 @@ class SynchronizeManager():
         return self.normalize_marks(self.fix_ssml(ssml_text))
 
     
-    def full_synchronization_pipeline(self, instructions, cur_message="", stt_language="en-US", tts_encoding=None, max_token=2000):
+    def full_synchronization_pipeline(self, instructions, cur_message="", stt_language="en-US", tts_encoding=None, max_token=2000, voice_name="en-US-Wavenet-F"):
         """
         Complete flow:
         1. OpenAI: instructions → SSML + slides (with <mark> tags)
@@ -279,7 +284,8 @@ class SynchronizeManager():
         tts_result = self.google_manager.advanced_tts(
             ssml,
             audio_encoding=tts_encoding,
-            language_code=stt_language
+            language_code=stt_language,
+            voice_name=voice_name
         )
         audio_bytes = tts_result["audio_content"]
         timepoints = tts_result.get("timepoints", [])
