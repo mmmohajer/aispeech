@@ -210,6 +210,17 @@ sudo ufw allow 24007/tcp
 sudo ufw allow 24009:24024/tcp
 sudo ufw allow 38465:38467/tcp
 sudo ufw allow 49152:60999/tcp
+# For TURN/STUN (Coturn)
+sudo ufw allow 3478/udp     # STUN/TURN UDP
+sudo ufw allow 3478/tcp     # TURN TCP fallback
+sudo ufw allow 5349/tcp     # TURN over TLS (optional, enable when using SSL)
+sudo ufw allow 20000:20100/udp  # TURN relay media ports
+
+# For Janus Gateway
+sudo ufw allow 8188/tcp     # Janus WebSocket
+sudo ufw allow 8088/tcp     # Janus REST API (optional, may restrict to internal only)
+sudo ufw allow 10000:10200/udp  # Janus RTP/RTCP media
+
 sudo ufw enable
 sudo reboot
 ```

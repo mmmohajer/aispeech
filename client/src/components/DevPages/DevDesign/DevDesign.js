@@ -19,6 +19,7 @@ import DisplayTable from "./subs/DisplayTable";
 import TestSocket from "./subs/TestSocket";
 import DisplayVoiceRecorder from "./subs/DisplayVoiceRecorder";
 import DisplayPagination from "./subs/DisplayPagination";
+import DisplayStreaming from "./subs/DisplayStreaming";
 
 import { DESIGN_ITEMS } from "./constants";
 
@@ -29,7 +30,7 @@ const DevDesign = () => {
     <>
       <Div className={cx("min-height-vh-full bg-theme-three")}>
         {showMenu ? (
-          <Div className="width-px-200 height-vh-full pos-fix pos-fix--lt of-y-auto bg-theme-one">
+          <Div className="width-px-200 min-height-vh-full of-y-auto bg-theme-one scroll-type-one">
             {DESIGN_ITEMS?.map((item, idx) => (
               <Div
                 key={idx}
@@ -87,6 +88,7 @@ const DevDesign = () => {
               {chosenItem === "test-socket" ? <TestSocket /> : ""}
               {chosenItem === "voice-recorder" ? <DisplayVoiceRecorder /> : ""}
               {chosenItem === "pagination" ? <DisplayPagination /> : ""}
+              {chosenItem === "streaming" ? <DisplayStreaming /> : ""}
             </Div>
           </Div>
         )}

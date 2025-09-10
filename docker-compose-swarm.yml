@@ -11,6 +11,7 @@ services:
       - ./nginx/certbot/conf:/etc/letsencrypt
       - ./nginx/certbot/www:/var/www/certbot
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd
+      - ./volume_data/websocket_tmp:/websocket_tmp
     networks:
       - appnetwork
     deploy:
@@ -36,6 +37,7 @@ services:
       - ./secrets/api/.env
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: ./docker-entrypoint-prod.sh
     networks:
       - appnetwork
@@ -51,6 +53,7 @@ services:
       - ./secrets/api/.env
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: celery -A config worker -l info
     networks:
       - appnetwork
@@ -66,6 +69,7 @@ services:
       - ./secrets/api/.env
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: celery -A config beat -l info
     networks:
       - appnetwork
@@ -81,6 +85,7 @@ services:
       - ./secrets/api/.env
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: celery -A config flower --url_prefix=/flower --basic_auth=${CELERY_FLOWER_USER}:${CELERY_FLOWER_PASSWORD}
     networks:
       - appnetwork
@@ -96,6 +101,7 @@ services:
       - ./secrets/api/.env
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: daphne -b 0.0.0.0 -p 8001 config.asgi:application
     networks:
       - appnetwork
@@ -164,13 +170,74 @@ services:
 
   certbot:
     image: certbot/dns-cloudflare
-    container_name: certbot
     volumes:
       - ./nginx/certbot/conf:/etc/letsencrypt
       - ./nginx/certbot/www:/var/www/certbot
+      - ./secrets/secret_files/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro
     entrypoint: /bin/sh -c 'trap exit TERM; while :; do sleep 12h; certbot renew --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini --quiet; done'
     networks:
       - appnetwork
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  coturn:
+    image: coturn/coturn
+    restart: always
+    # volumes:
+    #   - /etc/letsencrypt/live/turn.myapp.com:/etc/coturn/certs:ro  # <-- mount certs in production
+    env_file:
+      - ./secrets/coturn/.env
+    command: >
+      turnserver -n
+      --lt-cred-mech
+      --realm=${COTURN_REALM}
+      --user=${COTURN_USER}:${COTURN_PASSWORD}
+      --external-ip=${COTURN_EXTERNAL_IP}
+      --log-file=stdout
+      --min-port=20000
+      --max-port=20100
+      --no-stdout-log
+    ports:
+      - target: 3478
+        published: 3478
+        protocol: udp
+        mode: host
+      - target: 3478
+        published: 3478
+        protocol: tcp
+        mode: host
+      # If/when TLS is enabled:
+      # - target: 5349
+      #   published: 5349
+      #   protocol: tcp
+      #   mode: host
+      # Relay UDP range (enumerate all; shown small sample)
+      ##### COMES FROM utils/coturn_ports.txt
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  janus:
+    image: canyan/janus-gateway:latest
+    restart: always
+    volumes:
+      - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+      - ./janus/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
+    ports:
+      - target: 8188
+        published: 8188
+        protocol: tcp
+        mode: host
+      # Optional REST; consider internal-only:
+      # - target: 8088
+      #   published: 8088
+      #   protocol: tcp
+      #   mode: host
+      # Media UDP range (enumerate all; shown small sample)
+      ##### COMES FROM utils/janus_ports.txt
     deploy:
       replicas: 1
       restart_policy:

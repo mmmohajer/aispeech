@@ -1,16 +1,60 @@
-"use client";
 import { useEffect, useRef, useState } from "react";
-
 import { ICE_SERVER_DOMAIN, APP_DOMAIN } from "config";
 
-export default function VoiceStreaming({ roomId = 1234 }) {
-  const localVideo = useRef(null);
-  const startedRef = useRef(false);
-  const [remoteFeeds, setRemoteFeeds] = useState([]); // [{ id: feedId, stream }]
+// 🔹 Helper: generate a black video track (keep canvas alive)
+const createBlackVideoTrack = ({ width = 640, height = 480 } = {}) => {
+  const canvas = Object.assign(document.createElement("canvas"), {
+    width,
+    height,
+  });
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, width, height);
+  const stream = canvas.captureStream(5); // 5 FPS of black frames
+  const track = stream.getVideoTracks()[0];
+  return { track, canvas };
+};
+
+// 🔹 Robustly find video sender (works even if sender.track is null)
+const getVideoSender = (pubHandle) => {
+  const pc = pubHandle?.webrtcStuff?.pc;
+  if (!pc) return null;
+
+  // Try senders
+  let sender = pc.getSenders().find((s) => s?.track?.kind === "video");
+  if (sender) return sender;
+
+  // Fallback: transceivers
+  if (typeof pc.getTransceivers === "function") {
+    const tx = pc.getTransceivers().find((t) => {
+      const k1 = t?.sender?.track?.kind;
+      const k2 = t?.receiver?.track?.kind;
+      return k1 === "video" || k2 === "video";
+    });
+    if (tx?.sender) return tx.sender;
+  }
+  return null;
+};
+
+// 🔹 Replace track inside PeerConnection
+const replaceVideoTrack = (newTrack, pubHandle) => {
+  const sender = getVideoSender(pubHandle);
+  if (sender) sender.replaceTrack(newTrack);
+};
+
+const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
+  const localVideoRef = useRef(null);
+  const localStreamRef = useRef(null);
   const remoteHandlesRef = useRef({});
-  const remoteStreamsRef = useRef({}); // feedId -> MediaStream
+  const remoteStreamsRef = useRef({});
   const feedMidsRef = useRef({});
-  const myIdRef = useRef(null); // 👈 store my publisher ID
+  const myIdRef = useRef(null);
+  const startedRef = useRef(false);
+  const pubRef = useRef(null); // Publisher handle
+
+  const [remoteFeeds, setRemoteFeeds] = useState([]);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [videoEnabled, setVideoEnabled] = useState(true);
 
   const ICE_SERVERS = [
     { urls: "stun:stun.l.google.com:19302" },
@@ -33,7 +77,6 @@ export default function VoiceStreaming({ roomId = 1234 }) {
     }
 
     let janus = null;
-    let pub = null;
 
     const extractMids = (publisher) => {
       const mids = (publisher?.streams || [])
@@ -50,14 +93,12 @@ export default function VoiceStreaming({ roomId = 1234 }) {
           server: JANUS_SERVER,
           iceServers: ICE_SERVERS,
           success: () => {
-            // ---- PUBLISHER ----
             janus.attach({
               plugin: "janus.plugin.videoroom",
               success: (handle) => {
-                pub = handle;
+                pubRef.current = handle;
 
-                // Join as publisher
-                pub.send({
+                handle.send({
                   message: {
                     request: "join",
                     room: roomId,
@@ -66,20 +107,26 @@ export default function VoiceStreaming({ roomId = 1234 }) {
                   },
                 });
 
-                // Capture and publish with echo cancellation
                 navigator.mediaDevices
                   .getUserMedia({
                     video: true,
                     audio: { echoCancellation: true, noiseSuppression: true },
                   })
                   .then((stream) => {
-                    if (localVideo.current)
-                      localVideo.current.srcObject = stream;
-                    pub.createOffer({
+                    localStreamRef.current = stream;
+                    stream
+                      .getAudioTracks()
+                      .forEach((t) => (t.enabled = audioEnabled));
+                    stream
+                      .getVideoTracks()
+                      .forEach((t) => (t.enabled = videoEnabled));
+                    if (localVideoRef.current)
+                      localVideoRef.current.srcObject = stream;
+                    handle.createOffer({
                       media: { audio: true, video: true },
                       trickle: true,
                       success: (jsep) =>
-                        pub.send({ message: { request: "publish" }, jsep }),
+                        handle.send({ message: { request: "publish" }, jsep }),
                       error: (err) =>
                         console.error("❌ Publisher createOffer error:", err),
                     });
@@ -91,17 +138,9 @@ export default function VoiceStreaming({ roomId = 1234 }) {
                 const evt = msg.videoroom;
 
                 if (evt === "joined") {
-                  myIdRef.current = msg.id; // 👈 save my ID
-                  console.log(
-                    "✅ Joined room",
-                    roomId,
-                    "with ID",
-                    myIdRef.current
-                  );
-
-                  // Subscribe to existing publishers (skip self)
+                  myIdRef.current = msg.id;
                   (msg.publishers || []).forEach((p) => {
-                    if (p.id === myIdRef.current) return; // skip myself
+                    if (p.id === myIdRef.current) return;
                     feedMidsRef.current[p.id] = extractMids(p);
                     subscribeToFeed(p.id);
                   });
@@ -110,19 +149,18 @@ export default function VoiceStreaming({ roomId = 1234 }) {
                 if (evt === "event") {
                   if (msg.publishers) {
                     msg.publishers.forEach((p) => {
-                      if (p.id === myIdRef.current) return; // skip myself
+                      if (p.id === myIdRef.current) return;
                       feedMidsRef.current[p.id] = extractMids(p);
                       subscribeToFeed(p.id);
                     });
                   }
                   if (msg.unpublished || msg.leaving) {
-                    const feedId = msg.unpublished || msg.leaving;
-                    cleanupFeed(feedId);
+                    cleanupFeed(msg.unpublished || msg.leaving);
                   }
                 }
 
                 if (jsep && jsep.type === "answer") {
-                  pub.handleRemoteJsep({ jsep });
+                  pubRef.current?.handleRemoteJsep({ jsep });
                 }
               },
 
@@ -134,17 +172,17 @@ export default function VoiceStreaming({ roomId = 1234 }) {
       },
     });
 
-    // ---- SUBSCRIBER ----
     const subscribeToFeed = (feedId) => {
-      if (!janus) return;
-      if (feedId === myIdRef.current) return; // 👈 don’t subscribe to myself
-      if (remoteHandlesRef.current[feedId]) return;
-
+      if (
+        !janus ||
+        feedId === myIdRef.current ||
+        remoteHandlesRef.current[feedId]
+      )
+        return;
       janus.attach({
         plugin: "janus.plugin.videoroom",
         success: (sub) => {
           remoteHandlesRef.current[feedId] = sub;
-
           sub.send({
             message: {
               request: "join",
@@ -154,27 +192,19 @@ export default function VoiceStreaming({ roomId = 1234 }) {
             },
           });
         },
-
         onmessage: (msg, jsep) => {
-          const evt = msg.videoroom;
-
-          if (evt === "attached") {
-            console.log("👀 Subscriber attached to feed", feedId);
-          }
-
           if (
-            evt === "event" &&
+            msg.videoroom === "event" &&
             (msg.unpublished || msg.leaving || msg.error_code === 428)
           ) {
             cleanupFeed(feedId);
           }
-
           if (jsep && jsep.type === "offer") {
             const sub = remoteHandlesRef.current[feedId];
             if (!sub) return;
             sub.createAnswer({
               jsep,
-              media: { audioSend: false, videoSend: false }, // don’t send audio back
+              media: { audioSend: false, videoSend: false },
               trickle: true,
               success: (jsepAnswer) => {
                 sub.send({
@@ -187,10 +217,8 @@ export default function VoiceStreaming({ roomId = 1234 }) {
             });
           }
         },
-
         onremotetrack: (track, mid, on) => {
           let stream = remoteStreamsRef.current[feedId];
-
           if (!on) {
             if (stream) {
               stream.getTracks().forEach((t) => {
@@ -201,7 +229,6 @@ export default function VoiceStreaming({ roomId = 1234 }) {
             }
             return;
           }
-
           if (!stream) {
             stream = new MediaStream();
             remoteStreamsRef.current[feedId] = stream;
@@ -211,29 +238,17 @@ export default function VoiceStreaming({ roomId = 1234 }) {
                 : [...prev, { id: String(feedId), stream }]
             );
           }
-
           if (!stream.getTracks().some((t) => t.id === track.id)) {
             stream.addTrack(track);
             setRemoteFeeds((prev) => [...prev]);
           }
-
-          console.log(
-            "🎥 Got remote track:",
-            track.kind,
-            "feed",
-            feedId,
-            "mid",
-            mid
-          );
         },
-
         oncleanup: () => cleanupFeed(feedId),
         error: (err) => console.error("❌ Subscriber attach error:", err),
       });
     };
 
     const cleanupFeed = (feedId) => {
-      console.log("🧹 Cleanup feed", feedId);
       setRemoteFeeds((prev) => prev.filter((f) => f.id !== String(feedId)));
       const stream = remoteStreamsRef.current[feedId];
       if (stream) {
@@ -262,41 +277,106 @@ export default function VoiceStreaming({ roomId = 1234 }) {
         Object.values(remoteStreamsRef.current).forEach((s) =>
           s.getTracks().forEach((t) => t.stop())
         );
-        pub?.hangup?.();
-        pub?.detach?.();
+        pubRef.current?.hangup?.();
+        pubRef.current?.detach?.();
         janus?.destroy?.();
       } catch {}
     };
   }, [roomId]);
 
-  return (
-    <div>
-      <h3>Room {roomId}</h3>
+  // Toggle audio
+  const toggleAudio = () => {
+    setAudioEnabled((prev) => {
+      const newVal = !prev;
+      if (localStreamRef.current) {
+        localStreamRef.current
+          .getAudioTracks()
+          .forEach((t) => (t.enabled = newVal));
+      }
+      pubRef.current?.send({
+        message: { request: "configure", audio: newVal },
+      });
+      return newVal;
+    });
+  };
 
-      {/* Local */}
-      <video
-        ref={localVideo}
-        autoPlay
-        muted
-        playsInline
-        style={{ width: 300, border: "2px solid green" }}
-      />
+  // Toggle video with black replacement
+  const toggleVideo = () => {
+    setVideoEnabled((prev) => {
+      const newVal = !prev;
+      const pc = pubRef.current?.webrtcStuff?.pc;
 
-      {/* Remotes */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {remoteFeeds.map(({ id, stream }) => (
-          <video
-            key={id}
-            autoPlay
-            playsInline
-            style={{ width: 300, border: "2px solid red" }}
-            ref={(el) => {
-              if (el && stream && el.srcObject !== stream)
-                el.srcObject = stream;
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
+      if (localStreamRef.current && pc) {
+        const current = localStreamRef.current.getVideoTracks()[0];
+
+        if (!newVal && replaceWithBlackTrack) {
+          // OFF → replace with black track
+          const { track: blackTrack } = createBlackVideoTrack();
+
+          // 1. replace on sender first
+          replaceVideoTrack(blackTrack, pubRef.current);
+
+          // 2. then clean up old & update local stream
+          if (current) {
+            localStreamRef.current.removeTrack(current);
+            current.stop();
+          }
+          localStreamRef.current.addTrack(blackTrack);
+
+          if (localVideoRef.current)
+            localVideoRef.current.srcObject = localStreamRef.current;
+
+          // keep Janus logically "video on"
+          pubRef.current.send({
+            message: { request: "configure", video: true },
+          });
+        } else if (newVal && replaceWithBlackTrack) {
+          // ON → restore camera
+          navigator.mediaDevices
+            .getUserMedia({ video: true })
+            .then((stream) => {
+              const camTrack = stream.getVideoTracks()[0];
+
+              // 1. replace on sender first
+              replaceVideoTrack(camTrack, pubRef.current);
+
+              // 2. then clean up old & update local stream
+              if (current) {
+                localStreamRef.current.removeTrack(current);
+                current.stop();
+              }
+              localStreamRef.current.addTrack(camTrack);
+
+              if (localVideoRef.current)
+                localVideoRef.current.srcObject = localStreamRef.current;
+
+              pubRef.current.send({
+                message: { request: "configure", video: true },
+              });
+            });
+        } else {
+          // fallback: enable/disable track
+          localStreamRef.current
+            .getVideoTracks()
+            .forEach((t) => (t.enabled = newVal));
+          pubRef.current.send({
+            message: { request: "configure", video: newVal },
+          });
+        }
+      }
+
+      return newVal;
+    });
+  };
+
+  return {
+    localVideoRef,
+    remoteFeeds,
+    audioEnabled,
+    videoEnabled,
+    toggleAudio,
+    toggleVideo,
+  };
+};
+
+export default useStreaming;

@@ -162,26 +162,32 @@ services:
     command: >
       turnserver -n
       --lt-cred-mech
-      --realm=myapp.com
-      --user=webrtcuser:webrtccred
-      --no-tls --no-dtls
+      --realm=${COTURN_REALM}
+      --user=${COTURN_USER}:${COTURN_PASSWORD}
+      --external-ip=${COTURN_EXTERNAL_IP}
       --log-file=stdout
       --min-port=20000
       --max-port=20100
+      --no-stdout-log
+    # Uncomment these for production inside command above:
+    # --cert=/etc/coturn/certs/fullchain.pem
+    # --pkey=/etc/coturn/certs/privkey.pem
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
-      - "5349:5349" # optional TLS
+      - "5349:5349/tcp"
       - "20000-20100:20000-20100/udp"
+    # volumes:
+    #   - /etc/letsencrypt/live/turn.myapp.com:/etc/coturn/certs:ro  # <-- mount certs in production
 
   janus:
     image: canyan/janus-gateway:latest
     platform: linux/amd64
     restart: always
     ports:
-      - "8188:8188" # WebSocket
-      - "8088:8088" # REST API
-      - "10000-10200:10000-10200/udp" # RTP (safe, doesn’t overlap coturn)
+      - "8188:8188"
+      - "8088:8088"
+      - "10000-10200:10000-10200/udp"
     volumes:
       - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
       - ./janus/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro

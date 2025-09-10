@@ -13,6 +13,7 @@ services:
       - ./nginx/certbot/conf:/etc/letsencrypt
       - ./nginx/certbot/www:/var/www/certbot
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd
+      - ./volume_data/websocket_tmp:/websocket_tmp
     depends_on:
       - client
       - api
@@ -43,6 +44,7 @@ services:
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
       - ./secrets/secret_files/cred.json:/run/secrets/cred.json:ro
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: ./docker-entrypoint-prod.sh
     depends_on:
       - db
@@ -59,6 +61,7 @@ services:
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
       - ./secrets/secret_files/cred.json:/run/secrets/cred.json:ro
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: celery -A config worker -l info
     depends_on:
       - db
@@ -75,6 +78,7 @@ services:
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
       - ./secrets/secret_files/cred.json:/run/secrets/cred.json:ro
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: celery -A config beat -l info
     depends_on:
       - db
@@ -92,6 +96,7 @@ services:
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
       - ./secrets/secret_files/cred.json:/run/secrets/cred.json:ro
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: celery -A config flower --url_prefix=/flower --basic_auth=${CELERY_FLOWER_USER}:${CELERY_FLOWER_PASSWORD}
     depends_on:
       - db
@@ -109,6 +114,7 @@ services:
     volumes:
       - ./volume_data/django_static:/usr/src/app/vol
       - ./secrets/secret_files/cred.json:/run/secrets/cred.json:ro
+      - ./volume_data/websocket_tmp:/websocket_tmp
     command: daphne -b 0.0.0.0 -p 8001 config.asgi:application
     depends_on:
       - db
@@ -151,3 +157,39 @@ services:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
       - ./volume_data/redis_celery_data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
+
+  coturn:
+    image: coturn/coturn
+    restart: always
+    command: >
+      turnserver -n
+      --lt-cred-mech
+      --realm=${COTURN_REALM}
+      --user=${COTURN_USER}:${COTURN_PASSWORD}
+      --external-ip=${COTURN_EXTERNAL_IP}
+      --log-file=stdout
+      --min-port=20000
+      --max-port=20100
+      --no-stdout-log
+    # Uncomment these for production inside command above:
+    # --cert=/etc/coturn/certs/fullchain.pem
+    # --pkey=/etc/coturn/certs/privkey.pem
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      - "20000-20100:20000-20100/udp"
+    # volumes:
+    #   - /etc/letsencrypt/live/turn.myapp.com:/etc/coturn/certs:ro  # <-- mount certs in production
+
+  janus:
+    image: canyan/janus-gateway:latest
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "8188:8188"
+      - "8088:8088"
+      - "10000-10200:10000-10200/udp"
+    volumes:
+      - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+      - ./janus/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro

@@ -23,8 +23,8 @@ nat: {
   turn_server = "coturn"
   turn_port   = 3478
   turn_type   = "udp"
-  turn_user   = "webrtcuser"
-  turn_pwd    = "webrtccred"
+  turn_user   = "USER_NAME"
+  turn_pwd    = "PASSWORD"
 
   # Replace with your actual PUBLIC IP (from `curl ifconfig.me`)
   nat_1_1_mapping = "IP_ADDRESS_OR_DOMAIN"
