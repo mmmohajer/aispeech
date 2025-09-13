@@ -18,6 +18,9 @@ const ChatBox = ({
   handleAudioComplete,
   showLoader,
   setIsRecording,
+  mainContainerClassName,
+  mainContainerStyle = {},
+  onMessageSentClick,
   children,
 }) => {
   const messagesContainerRef = useRef(null);
@@ -80,7 +83,8 @@ const ChatBox = ({
     <Div
       type="flex"
       direction="vertical"
-      className="height-vh-full of-hidden width-per-100 p-all-16"
+      className={cx("of-hidden width-per-100", mainContainerClassName)}
+      style={mainContainerStyle}
     >
       <Div
         type="flex"
@@ -127,6 +131,13 @@ const ChatBox = ({
                 hAlign="center"
                 vAlign="center"
                 className={cx("width-px-50 height-px-50")}
+                onClick={() => {
+                  if (onMessageSentClick) {
+                    onMessageSentClick();
+                  } else {
+                    console.log("No onMessageSentClick function provided.");
+                  }
+                }}
               >
                 <Icon
                   type={"paper-plane"}

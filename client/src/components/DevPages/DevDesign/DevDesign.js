@@ -20,6 +20,8 @@ import TestSocket from "./subs/TestSocket";
 import DisplayVoiceRecorder from "./subs/DisplayVoiceRecorder";
 import DisplayPagination from "./subs/DisplayPagination";
 import DisplayStreaming from "./subs/DisplayStreaming";
+import DisplayChatBox from "./subs/DisplayChatBox";
+import DisplayConnectionToSocket from "./subs/DisplayConnectionToSocket";
 
 import { DESIGN_ITEMS } from "./constants";
 
@@ -89,6 +91,12 @@ const DevDesign = () => {
               {chosenItem === "voice-recorder" ? <DisplayVoiceRecorder /> : ""}
               {chosenItem === "pagination" ? <DisplayPagination /> : ""}
               {chosenItem === "streaming" ? <DisplayStreaming /> : ""}
+              {chosenItem === "chat-box" ? <DisplayChatBox /> : ""}
+              {chosenItem === "connection-to-socket" ? (
+                <DisplayConnectionToSocket />
+              ) : (
+                ""
+              )}
             </Div>
           </Div>
         )}

@@ -16,6 +16,11 @@ import {
   faMicrophone,
   faStopCircle,
   faPaperPlane,
+  faVolumeHigh,
+  faVolumeXmark,
+  faMicrophoneSlash,
+  faVideo,
+  faVideoSlash,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   faSquareInstagram,
@@ -198,15 +203,6 @@ const Icon = ({
         ""
       )}
 
-      {type === "microphone" ? (
-        <FontAwesomeIcon
-          icon={faMicrophone}
-          style={{ color, width, height, transform: `scale(${scale})` }}
-        />
-      ) : (
-        ""
-      )}
-
       {type === "stop-circle" ? (
         <FontAwesomeIcon
           icon={faStopCircle}
@@ -219,6 +215,60 @@ const Icon = ({
       {type === "paper-plane" ? (
         <FontAwesomeIcon
           icon={faPaperPlane}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "volume-high" ? (
+        <FontAwesomeIcon
+          icon={faVolumeHigh}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "volume-xmark" ? (
+        <FontAwesomeIcon
+          icon={faVolumeXmark}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "microphone" ? (
+        <FontAwesomeIcon
+          icon={faMicrophone}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "microphone-slash" ? (
+        <FontAwesomeIcon
+          icon={faMicrophoneSlash}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "video" ? (
+        <FontAwesomeIcon
+          icon={faVideo}
+          style={{ color, width, height, transform: `scale(${scale})` }}
+        />
+      ) : (
+        ""
+      )}
+
+      {type === "video-slash" ? (
+        <FontAwesomeIcon
+          icon={faVideoSlash}
           style={{ color, width, height, transform: `scale(${scale})` }}
         />
       ) : (

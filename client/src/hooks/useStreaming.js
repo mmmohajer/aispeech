@@ -55,7 +55,7 @@ const replaceVideoTrack = (newTrack, pubHandle) => {
   if (sender) sender.replaceTrack(newTrack);
 };
 
-const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
+const useStreaming = ({ roomId, replaceWithBlackTrack = false }) => {
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteHandlesRef = useRef({});
@@ -68,6 +68,7 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
   const [remoteFeeds, setRemoteFeeds] = useState([]);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
+  const [allMuted, setAllMuted] = useState(false);
 
   const ICE_SERVERS = [
     { urls: "stun:stun.l.google.com:19302" },
@@ -116,15 +117,41 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
               success: (handle) => {
                 pubRef.current = handle;
 
+                // 🔹 First try to create the room
                 handle.send({
                   message: {
-                    request: "join",
-                    room: roomId,
-                    ptype: "publisher",
-                    display: `user-${Math.floor(Math.random() * 1000)}`,
+                    request: "create",
+                    room: parseInt(roomId, 10), // Janus expects numbers
+                    description: `Room ${roomId}`,
+                    publishers: 20,
+                  },
+                  success: (result) => {
+                    // Now join the room
+                    handle.send({
+                      message: {
+                        request: "join",
+                        room: parseInt(roomId, 10),
+                        ptype: "publisher",
+                        display: `user-${Math.floor(Math.random() * 1000)}`,
+                      },
+                    });
+                  },
+                  error: (err) => {
+                    console.warn("⚠️ Room creation failed, maybe exists:", err);
+
+                    // Still attempt join anyway
+                    handle.send({
+                      message: {
+                        request: "join",
+                        room: parseInt(roomId, 10),
+                        ptype: "publisher",
+                        display: `user-${Math.floor(Math.random() * 1000)}`,
+                      },
+                    });
                   },
                 });
 
+                // Once joined, publish local stream
                 navigator.mediaDevices
                   .getUserMedia({
                     video: true,
@@ -204,7 +231,7 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
           sub.send({
             message: {
               request: "join",
-              room: roomId,
+              room: parseInt(roomId, 10),
               ptype: "subscriber",
               feed: feedId,
             },
@@ -226,7 +253,7 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
               trickle: true,
               success: (jsepAnswer) =>
                 sub.send({
-                  message: { request: "start", room: roomId },
+                  message: { request: "start", room: parseInt(roomId, 10) },
                   jsep: jsepAnswer,
                 }),
               error: (err) =>
@@ -327,7 +354,6 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
         const current = localStreamRef.current.getVideoTracks()[0];
 
         if (!newVal && replaceWithBlackTrack) {
-          // OFF → replace with black
           const { track: blackTrack, canvas } = createBlackVideoTrack();
           replaceVideoTrack(blackTrack, pubRef.current);
 
@@ -343,10 +369,8 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
             message: { request: "configure", video: true },
           });
 
-          // cleanup canvas if needed
           setTimeout(() => canvas.remove(), 0);
         } else if (newVal && replaceWithBlackTrack) {
-          // ON → restore camera
           navigator.mediaDevices
             .getUserMedia({ video: true })
             .then((stream) => {
@@ -365,20 +389,17 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
                 message: { request: "configure", video: true },
               });
 
-              // stop leftover temp stream
               stream.getTracks().forEach((t) => {
                 if (t !== camTrack) t.stop();
               });
             })
             .catch((err) => {
               console.error("❌ Camera restore failed:", err);
-              // fallback: keep black track if restore fails
               const { track: blackTrack } = createBlackVideoTrack();
               replaceVideoTrack(blackTrack, pubRef.current);
               localStreamRef.current.addTrack(blackTrack);
             });
         } else {
-          // fallback: disable track only
           localStreamRef.current
             .getVideoTracks()
             .forEach((t) => (t.enabled = newVal));
@@ -391,6 +412,19 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
     });
   };
 
+  const toggleRemoteAudio = () => {
+    setAllMuted((prev) => {
+      const newVal = !prev;
+      setRemoteFeeds((feeds) => {
+        feeds.forEach(({ stream }) => {
+          stream.getAudioTracks().forEach((t) => (t.enabled = !newVal));
+        });
+        return [...feeds];
+      });
+      return newVal;
+    });
+  };
+
   return {
     localVideoRef,
     remoteFeeds,
@@ -398,6 +432,8 @@ const useStreaming = ({ roomId = 1234, replaceWithBlackTrack = false }) => {
     videoEnabled,
     toggleAudio,
     toggleVideo,
+    allMuted,
+    toggleRemoteAudio,
   };
 };
 

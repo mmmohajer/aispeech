@@ -1,8 +1,9 @@
 from fabric import task
 
 from config.utils.role_based import build_group_list
+from core.utils.test import test_core_utils
 from ai.utils.test import test_ai_manager
-from app.utils.test import make_teaching_data_ready_for_user
+from app.utils.test import make_teaching_data_ready_for_user, test
 
 @task
 def buildgrouplist(ctx):
@@ -15,3 +16,11 @@ def testaimanager(ctx):
 @task
 def maketeachingdata(ctx):
     make_teaching_data_ready_for_user()
+
+@task
+def testcoreutils(ctx):
+    test_core_utils()
+
+@task
+def testapputils(ctx):
+    test()

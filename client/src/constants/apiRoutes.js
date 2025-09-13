@@ -14,3 +14,5 @@ export const PROFILE_API_ROUTE = "/api/profile/";
 export const WEBSOCKET_TEST_API_ROUTE = `/wss/test-socket/`;
 export const CHAT_BOT_API_ROUTE = `/wss/chat-bot/`;
 export const TEACHER_API_ROUTE = `/wss/teacher/`;
+export const TRANSLATOR_API_ROUTE = `/wss/translator/`;
+export const NARRATOR_API_ROUTE = `/wss/narrator/`;

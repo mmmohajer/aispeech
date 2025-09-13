@@ -16,5 +16,11 @@ export const ICON_TYPES = [
   "telegram",
   "youtube",
   "upload",
+  "volume-high",
+  "volume-xmark",
+  "microphone",
+  "microphone-slash",
+  "video",
+  "video-slash",
   "circle-play",
 ];

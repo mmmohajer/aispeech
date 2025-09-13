@@ -14,4 +14,6 @@ export const DESIGN_ITEMS = [
   { identifier: "voice-recorder", title: "Voice Recorder" },
   { identifier: "pagination", title: "Pagination" },
   { identifier: "streaming", title: "Streaming" },
+  { identifier: "chat-box", title: "Chat Box" },
+  { identifier: "connection-to-socket", title: "Connection to Socket" },
 ];
